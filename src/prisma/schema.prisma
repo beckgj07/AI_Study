@@ -1,0 +1,240 @@
+// Prisma schema for AI_Study
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// 用户 (User) - 支持家长和孩子两种角色
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  avatar    String?
+  role      String   @default("child") // "parent" | "child"
+  parentId  String?  // 家长ID，孩子账号关联到家长
+  grade     Int?     // 年级 1-6
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联
+  parent          User?           @relation("ParentChild", fields: [parentId], references: [id])
+  children        User[]          @relation("ParentChild")
+  subjects        UserSubject[]
+  answerRecords   AnswerRecord[]
+  wrongQuestions  WrongQuestion[]
+  achievements    Achievement[]
+  points          Point[]
+  checkIns        CheckIn[]
+  // 家长端设置
+  dailyGoal       Int?    @default(3)   // 每日目标（关卡数）
+  weeklyGoal      Int?    @default(15) // 每周目标
+  rewardRules     Json?   // 奖励规则配置
+}
+
+// 科目 (Subject)
+model Subject {
+  id         String   @id @default(cuid())
+  name       String             // 科目名称：数学、语文、英语
+  icon       String?            // 图标
+  isPreset   Boolean @default(false) // 是否预设（语数外）
+  isRequired Boolean @default(true)  // 是否必选
+  order      Int      @default(0)    // 排序
+  createdAt  DateTime @default(now())
+
+  // 关联
+  textbookVersions TextbookVersion[]
+  userSubjects     UserSubject[]
+  courses          Course[]
+}
+
+// 教材版本 (TextbookVersion)
+model TextbookVersion {
+  id         String   @id @default(cuid())
+  name       String             // 版本名称：人教版、北师大版等
+  publisher  String?            // 出版社
+  subjectId  String
+  createdAt  DateTime @default(now())
+
+  // 关联
+  subject     Subject      @relation(fields: [subjectId], references: [id])
+  userSubjects UserSubject[]
+}
+
+// 用户科目绑定 (UserSubject)
+model UserSubject {
+  id               String   @id @default(cuid())
+  userId           String
+  subjectId        String
+  grade            Int      // 年级
+  textbookVersionId String? // 教材版本
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // 关联
+  user            User             @relation(fields: [userId], references: [id])
+  subject         Subject          @relation(fields: [subjectId], references: [id])
+  textbookVersion TextbookVersion? @relation(fields: [textbookVersionId], references: [id])
+
+  @@unique([userId, subjectId, grade])
+}
+
+// 课程 (Course) - 科目+年级
+model Course {
+  id        String   @id @default(cuid())
+  name      String
+  subjectId String
+  grade     Int      // 年级
+  createdAt DateTime @default(now())
+
+  // 关联
+  subject Subject @relation(fields: [subjectId], references: [id])
+  units   Unit[]
+}
+
+// 单元 (Unit)
+model Unit {
+  id        String   @id @default(cuid())
+  name      String
+  order     Int      @default(0)
+  courseId  String
+  createdAt DateTime @default(now())
+
+  // 关联
+  course   Course    @relation(fields: [courseId], references: [id])
+  chapters Chapter[]
+}
+
+// 章节 (Chapter)
+model Chapter {
+  id        String   @id @default(cuid())
+  name      String
+  order     Int      @default(0)
+  difficulty Int     @default(1) // 难度等级 1-4
+  unitId    String
+  createdAt DateTime @default(now())
+
+  // 关联
+  unit      Unit       @relation(fields: [unitId], references: [id])
+  questions Question[]
+}
+
+// 题目 (Question)
+model Question {
+  id          String   @id @default(cuid())
+  chapterId   String
+  type        String   // "choice" | "multiple" | "fill" | "essay"
+  difficulty  Int      @default(1) // 1-4 基础/应用/综合/拓展
+  content     String             // 题目内容
+  options     Json?              // 选项（用于选择题）
+  answer      String             // 正确答案
+  explanation String?            // AI讲解
+  knowledgePoint String?         // 知识点标签
+  source      String?            // 来源：教材/AI生成/手动
+  createdAt   DateTime @default(now())
+
+  // 关联
+  chapter       Chapter        @relation(fields: [chapterId], references: [id])
+  answerRecords AnswerRecord[]
+  wrongQuestions WrongQuestion[]
+}
+
+// 答题记录 (AnswerRecord)
+model AnswerRecord {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String
+  answer     String             // 用户答案
+  isCorrect  Boolean
+  timeSpent  Int?              // 耗时（秒）
+  mode       String   @default("practice") // "practice" | "exam"
+  createdAt  DateTime @default(now())
+
+  // 关联
+  user     User     @relation(fields: [userId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+}
+
+// 错题本 (WrongQuestion)
+model WrongQuestion {
+  id           String   @id @default(cuid())
+  userId       String
+  questionId   String
+  wrongCount   Int      @default(1) // 错误次数
+  wrongReason  String?            // 错因分析
+  lastReview   DateTime?
+  nextReview   DateTime?         // 下次复习时间
+  isMastered   Boolean @default(false) // 是否已掌握
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 关联
+  user     User     @relation(fields: [userId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@unique([userId, questionId])
+}
+
+// 成就 (Achievement)
+model Achievement {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String             // 成就类型标识
+  name      String             // 成就名称
+  desc      String?            // 成就描述
+  icon      String?            // 图标
+  unlockedAt DateTime @default(now())
+
+  // 关联
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type])
+}
+
+// 积分 (Point)
+model Point {
+  id        String   @id @default(cuid())
+  userId    String
+  points    Int                // 积分变动（可正可负）
+  source    String            // 来源：做题/打卡/成就/兑换
+  desc      String?           // 描述
+  createdAt DateTime @default(now())
+
+  // 关联
+  user User @relation(fields: [userId], references: [id])
+}
+
+// 打卡记录 (CheckIn)
+model CheckIn {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String               // 日期格式：YYYY-MM-DD
+  completed Boolean @default(false)
+  goal      Int?                 // 当日目标
+  achieved  Int?                 // 完成数量
+  createdAt DateTime @default(now())
+
+  // 关联
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+}
+
+// AI模型配置 (AiModelConfig)
+model AiModelConfig {
+  id        String   @id @default(cuid())
+  name      String             // 模型名称：GLM/千问/Kimi
+  provider  String             // 提供商
+  apiUrl    String             // API地址
+  apiKey    String?            // API Key（加密存储）
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  priority  Int      @default(0) // 调用优先级
+  costLimit Float?             // 成本限制
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

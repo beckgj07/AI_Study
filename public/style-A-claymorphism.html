@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI_Study - 软陶风格</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563EB',
+            secondary: '#3B82F6',
+            accent: '#F97316',
+            success: '#22C55E',
+            error: '#EF4444',
+            background: '#F8FAFC',
+            text: '#1E293B',
+          },
+          fontFamily: {
+            baloo: ['Baloo 2', 'cursive'],
+          },
+          boxShadow: {
+            'clay': '8px 8px 16px rgba(0,0,0,0.1), -8px -8px 16px rgba(255,255,255,0.8)',
+            'clay-sm': '4px 4px 8px rgba(0,0,0,0.08), -4px -4px 8px rgba(255,255,255,0.6)',
+            'clay-inset': 'inset 4px 4px 8px rgba(0,0,0,0.1), inset -4px -4px 8px rgba(255,255,255,0.8)',
+            'clay-hover': '12px 12px 24px rgba(0,0,0,0.12), -12px -12px 24px rgba(255,255,255,0.9)',
+          },
+          borderRadius: {
+            'clay': '32px',
+            'clay-sm': '20px',
+            'clay-xs': '12px',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Baloo 2', cursive; }
+    .clay-card {
+      background: #F8FAFC;
+      border-radius: 32px;
+      box-shadow: 8px 8px 16px rgba(0,0,0,0.1), -8px -8px 16px rgba(255,255,255,0.8);
+    }
+    .clay-card-sm {
+      background: #F8FAFC;
+      border-radius: 20px;
+      box-shadow: 4px 4px 8px rgba(0,0,0,0.08), -4px -4px 8px rgba(255,255,255,0.6);
+    }
+    .clay-inset {
+      box-shadow: inset 4px 4px 8px rgba(0,0,0,0.1), inset -4px -4px 8px rgba(255,255,255,0.8);
+    }
+    .clay-btn {
+      background: linear-gradient(145deg, #F97316, #EA580C);
+      border-radius: 20px;
+      box-shadow: 4px 4px 8px rgba(0,0,0,0.15), -2px -2px 6px rgba(255,255,255,0.3);
+      transition: all 0.2s ease;
+    }
+    .clay-btn:hover {
+      box-shadow: 6px 6px 12px rgba(0,0,0,0.2), -3px -3px 8px rgba(255,255,255,0.4);
+      transform: translateY(-2px);
+    }
+    .clay-btn:active {
+      box-shadow: inset 2px 2px 4px rgba(0,0,0,0.2);
+      transform: translateY(0);
+    }
+    .clay-btn-blue { background: linear-gradient(145deg, #3B82F6, #2563EB); }
+    .clay-btn-green { background: linear-gradient(145deg, #22C55E, #16A34A); }
+    .avatar {
+      width: 80px; height: 80px; border-radius: 24px;
+      box-shadow: 6px 6px 12px rgba(0,0,0,0.1), -6px -6px 12px rgba(255,255,255,0.8);
+    }
+    .progress-bar {
+      background: #E2E8F0; border-radius: 10px;
+      box-shadow: inset 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    .progress-fill { background: linear-gradient(90deg, #3B82F6, #2563EB); border-radius: 10px; }
+    .option-card { transition: all 0.2s ease; cursor: pointer; border: 3px solid transparent; }
+    .option-card:hover { border-color: #3B82F6; transform: translateY(-2px); }
+    .option-card.selected { border-color: #F97316; background: #FFF7ED; }
+    .float-blob { animation: float 3s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  </style>
+</head>
+<body class="bg-background text-text min-h-screen">
+  <!-- Navigation -->
+  <div class="fixed left-0 top-0 h-full w-64 bg-white shadow-lg z-50 p-4">
+    <div class="text-2xl font-bold text-primary mb-8 text-center">AI_Study</div>
+    <nav class="space-y-2">
+      <div class="p-3 rounded-xl text-center bg-primary text-white cursor-pointer">首页</div>
+      <div class="p-3 rounded-xl text-center hover:bg-gray-100 cursor-pointer">知识地图</div>
+      <div class="p-3 rounded-xl text-center hover:bg-gray-100 cursor-pointer">闯关测验</div>
+      <div class="p-3 rounded-xl text-center hover:bg-gray-100 cursor-pointer">错题本</div>
+      <div class="p-3 rounded-xl text-center hover:bg-gray-100 cursor-pointer">学习报告</div>
+      <div class="p-3 rounded-xl text-center hover:bg-gray-100 cursor-pointer">成就墙</div>
+    </nav>
+  </div>
+
+  <!-- Main Content -->
+  <div class="ml-64 p-8">
+    <div class="max-w-6xl mx-auto">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-full bg-gradient-to-br from-yellow-300 to-orange-400 flex items-center justify-center text-2xl">🦁</div>
+          <div><div class="font-bold text-lg">小明</div><div class="text-sm text-gray-500">学习中...</div></div>
+        </div>
+        <div class="flex gap-4 text-sm">
+          <div class="clay-card-sm px-4 py-2 flex items-center gap-2 cursor-pointer"><span>🎯</span><span>连续学习 <strong>7</strong> 天</span></div>
+          <div class="clay-card-sm px-4 py-2 flex items-center gap-2 cursor-pointer"><span>⭐</span><span><strong>1250</strong> 积分</span></div>
+        </div>
+      </div>
+
+      <!-- Hero Section -->
+      <div class="clay-card p-8 mb-6 relative overflow-hidden">
+        <div class="float-blob absolute top-4 right-4 w-32 h-32 bg-gradient-to-br from-purple-200 to-pink-200 rounded-full opacity-50 blur-xl"></div>
+        <div class="float-blob absolute bottom-4 left-4 w-24 h-24 bg-gradient-to-br from-blue-200 to-cyan-200 rounded-full opacity-50 blur-xl" style="animation-delay: 1s;"></div>
+        <h1 class="text-3xl font-bold text-primary mb-2">让学习变得有趣！✨</h1>
+        <p class="text-gray-500 mb-6">今天已完成 2/3 关卡，继续加油！</p>
+        <div class="flex gap-4">
+          <button class="clay-btn text-white px-6 py-3 font-bold">🎮 开始闯关</button>
+          <button class="clay-btn clay-btn-green text-white px-6 py-3 font-bold">🔥 巩固错题</button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="clay-card p-4 text-center">
+          <div class="text-3xl mb-2">📝</div>
+          <div class="text-2xl font-bold">256</div>
+          <div class="text-xs text-gray-500">总题数</div>
+        </div>
+        <div class="clay-card p-4 text-center">
+          <div class="text-3xl mb-2">✅</div>
+          <div class="text-2xl font-bold text-success">78%</div>
+          <div class="text-xs text-gray-500">正确率</div>
+        </div>
+        <div class="clay-card p-4 text-center">
+          <div class="text-3xl mb-2">⏱️</div>
+          <div class="text-2xl font-bold">12h</div>
+          <div class="text-xs text-gray-500">总用时</div>
+        </div>
+        <div class="clay-card p-4 text-center">
+          <div class="text-3xl mb-2">🔥</div>
+          <div class="text-2xl font-bold">7天</div>
+          <div class="text-xs text-gray-500">连续学习</div>
+        </div>
+      </div>
+
+      <!-- Today's Progress -->
+      <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <div class="clay-card p-6">
+          <h3 class="font-bold text-lg mb-4">📅 今日任务</h3>
+          <div class="progress-bar p-1 mb-4"><div class="progress-fill h-full" style="width: 70%"></div></div>
+          <div class="text-sm text-gray-500 mb-4">完成 3 关闯关 (2/3)</div>
+          <button class="clay-btn text-white px-6 py-3 w-full font-bold">开始今日闯关</button>
+        </div>
+        <div class="clay-card p-6">
+          <h3 class="font-bold text-lg mb-4 flex items-center gap-2">
+            <span>🔥</span> 错题待巩固
+            <span class="bg-error text-white text-xs px-2 py-1 rounded-full">3题</span>
+          </h3>
+          <div class="space-y-2 mb-4">
+            <div class="clay-card-sm p-3 text-sm">📐 数学·第一章 - 乘法分配律</div>
+            <div class="clay-card-sm p-3 text-sm">📝 数学·第二章 - 分数加减</div>
+          </div>
+          <button class="clay-btn clay-btn-green text-white px-6 py-3 w-full font-bold">立即巩固</button>
+        </div>
+      </div>
+
+      <!-- Recommended -->
+      <div class="clay-card p-6 mb-6">
+        <h3 class="font-bold text-lg mb-4">🎯 推荐闯关</h3>
+        <div class="grid grid-cols-4 gap-4">
+          <div class="clay-card-sm p-4 text-center cursor-pointer hover:shadow-clay-hover transition-shadow">
+            <div class="text-4xl mb-2">📐</div>
+            <div class="font-bold text-sm">数学·三下</div>
+            <div class="text-xs text-gray-500">第5章</div>
+            <div class="text-xs mt-1">⭐⭐⭐☆☆</div>
+          </div>
+          <div class="clay-card-sm p-4 text-center cursor-pointer hover:shadow-clay-hover transition-shadow">
+            <div class="text-4xl mb-2">📖</div>
+            <div class="font-bold text-sm">语文·三下</div>
+            <div class="text-xs text-gray-500">第3章</div>
+            <div class="text-xs mt-1">⭐⭐⭐⭐☆</div>
+          </div>
+          <div class="clay-card-sm p-4 text-center cursor-pointer hover:shadow-clay-hover transition-shadow">
+            <div class="text-4xl mb-2">🔤</div>
+            <div class="font-bold text-sm">英语·三下</div>
+            <div class="text-xs text-gray-500">第2章</div>
+            <div class="text-xs mt-1">⭐⭐☆☆☆</div>
+          </div>
+          <div class="clay-card-sm p-4 text-center cursor-pointer border-2 border-accent bg-orange-50">
+            <div class="text-4xl mb-2">🏅</div>
+            <div class="font-bold text-sm text-accent">数学·奥赛</div>
+            <div class="text-xs text-gray-500">基础训练</div>
+            <div class="text-xs mt-1 text-accent">⭐⭐⭐⭐⭐</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quiz Card -->
+      <div class="clay-card p-8 mb-6">
+        <div class="flex items-center gap-4 mb-6">
+          <span class="clay-card-sm px-3 py-1 text-sm">📐 数学</span>
+          <span class="clay-card-sm px-3 py-1 text-sm">三年级</span>
+          <span class="clay-card-sm px-3 py-1 text-sm">⭐⭐☆☆☆ 基础</span>
+        </div>
+        <h3 class="text-2xl font-bold mb-8 text-center">25 × 17 = ?</h3>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="option-card clay-card-sm p-6 text-center text-lg font-bold">A. 325</div>
+          <div class="option-card selected clay-card-sm p-6 text-center text-lg font-bold">B. 425</div>
+          <div class="option-card clay-card-sm p-6 text-center text-lg font-bold">C. 525</div>
+          <div class="option-card clay-card-sm p-6 text-center text-lg font-bold">D. 625</div>
+        </div>
+        <div class="grid grid-cols-3 gap-4 mt-6">
+          <button class="clay-btn clay-btn-blue text-white py-3 font-bold">💡 提示</button>
+          <button class="clay-btn clay-btn-green text-white py-3 font-bold">⏭️ 跳过</button>
+          <button class="clay-btn text-white py-3 font-bold">提交答案</button>
+        </div>
+      </div>
+
+      <!-- Achievements -->
+      <div class="clay-card p-6">
+        <h3 class="font-bold text-lg mb-4">🏆 最近成就</h3>
+        <div class="grid grid-cols-4 gap-4">
+          <div class="clay-card-sm p-4 text-center">
+            <div class="text-4xl mb-2">🔥</div>
+            <div class="font-bold text-sm">连续7天</div>
+          </div>
+          <div class="clay-card-sm p-4 text-center">
+            <div class="text-4xl mb-2">🎯</div>
+            <div class="font-bold text-sm">首次全对</div>
+          </div>
+          <div class="clay-card-sm p-4 text-center">
+            <div class="text-4xl mb-2">📝</div>
+            <div class="font-bold text-sm">答题王</div>
+          </div>
+          <div class="clay-card-sm p-4 text-center opacity-50">
+            <div class="text-4xl mb-2">🔒</div>
+            <div class="font-bold text-sm">数学大师</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

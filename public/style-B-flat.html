@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI_Study - 扁平化风格</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563EB',
+            secondary: '#3B82F6',
+            accent: '#F97316',
+            success: '#22C55E',
+            error: '#EF4444',
+            background: '#FFFFFF',
+            text: '#1E293B',
+          },
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .flat-card { border-radius: 12px; border: 1px solid #E2E8F0; }
+    .flat-btn {
+      border-radius: 8px; transition: all 0.15s ease;
+    }
+    .flat-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .flat-btn:active { transform: translateY(0); }
+    .progress-bar { background: #E2E8F0; border-radius: 4px; }
+    .progress-fill { background: #2563EB; border-radius: 4px; }
+    .option-card { border-radius: 12px; border: 2px solid #E2E8F0; transition: all 0.15s ease; cursor: pointer; }
+    .option-card:hover { border-color: #2563EB; }
+    .option-card.selected { border-color: #2563EB; background: #EFF6FF; }
+  </style>
+</head>
+<body class="bg-background text-text min-h-screen">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="text-xl font-bold text-primary">AI_Study</div>
+      <div class="flex items-center gap-6">
+        <a href="#" class="text-primary font-medium">首页</a>
+        <a href="#" class="text-gray-500 hover:text-gray-800">知识地图</a>
+        <a href="#" class="text-gray-500 hover:text-gray-800">闯关测验</a>
+        <a href="#" class="text-gray-500 hover:text-gray-800">错题本</a>
+        <div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold">小</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="pt-24 pb-12 px-6">
+    <div class="max-w-6xl mx-auto">
+      <!-- Header Stats -->
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="text-2xl font-bold">小明同学，继续加油！</h1>
+          <p class="text-gray-500">今天已完成 2/3 关卡</p>
+        </div>
+        <div class="flex gap-6 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-gray-500">连续学习</span>
+            <span class="font-bold text-primary">7天</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-gray-500">积分</span>
+            <span class="font-bold text-accent">1250</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero Card -->
+      <div class="bg-primary text-white rounded-xl p-8 mb-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-3xl font-bold mb-2">开始今日学习</h2>
+            <p class="opacity-80 mb-6">完成关卡获得积分和成就</p>
+            <div class="flex gap-3">
+              <button class="flat-btn bg-white text-primary px-6 py-3 font-bold">开始闯关</button>
+              <button class="flat-btn bg-white/20 text-white px-6 py-3 font-bold">巩固错题</button>
+            </div>
+          </div>
+          <div class="text-8xl opacity-20">📚</div>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="flat-card p-4 text-center">
+          <div class="text-2xl mb-1">📝</div>
+          <div class="text-2xl font-bold">256</div>
+          <div class="text-xs text-gray-500">总题数</div>
+        </div>
+        <div class="flat-card p-4 text-center">
+          <div class="text-2xl mb-1">✅</div>
+          <div class="text-2xl font-bold text-success">78%</div>
+          <div class="text-xs text-gray-500">正确率</div>
+        </div>
+        <div class="flat-card p-4 text-center">
+          <div class="text-2xl mb-1">⏱️</div>
+          <div class="text-2xl font-bold">12h</div>
+          <div class="text-xs text-gray-500">总用时</div>
+        </div>
+        <div class="flat-card p-4 text-center">
+          <div class="text-2xl mb-1">🔥</div>
+          <div class="text-2xl font-bold">7天</div>
+          <div class="text-xs text-gray-500">连续学习</div>
+        </div>
+      </div>
+
+      <!-- Two Column -->
+      <div class="grid md:grid-cols-2 gap-6 mb-6">
+        <div class="flat-card p-6">
+          <h3 class="font-bold mb-4">今日任务</h3>
+          <div class="progress-bar p-1 mb-2"><div class="progress-fill h-full" style="width: 70%"></div></div>
+          <div class="flex justify-between text-sm text-gray-500 mb-4">
+            <span>完成 3 关闯关</span><span>2/3</span>
+          </div>
+          <button class="flat-btn bg-primary text-white px-6 py-3 w-full font-medium">开始闯关</button>
+        </div>
+        <div class="flat-card p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold">错题待巩固</h3>
+            <span class="bg-error text-white text-xs px-2 py-1 rounded-full">3题</span>
+          </div>
+          <div class="space-y-2 mb-4">
+            <div class="bg-gray-50 p-3 rounded-lg text-sm">数学·第一章 - 乘法分配律</div>
+            <div class="bg-gray-50 p-3 rounded-lg text-sm">数学·第二章 - 分数加减</div>
+          </div>
+          <button class="flat-btn bg-success text-white px-6 py-3 w-full font-medium">立即巩固</button>
+        </div>
+      </div>
+
+      <!-- Quiz Card -->
+      <div class="flat-card p-6 mb-6">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="bg-blue-100 text-primary px-3 py-1 rounded-full text-sm">数学</span>
+          <span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm">三年级</span>
+          <span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-sm">基础</span>
+        </div>
+        <h3 class="text-xl font-bold mb-6 text-center">25 × 17 = ?</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="option-card p-4 text-center font-medium">A. 325</div>
+          <div class="option-card selected p-4 text-center font-medium border-primary bg-blue-50">B. 425</div>
+          <div class="option-card p-4 text-center font-medium">C. 525</div>
+          <div class="option-card p-4 text-center font-medium">D. 625</div>
+        </div>
+        <div class="grid grid-cols-3 gap-3 mt-6">
+          <button class="flat-btn bg-gray-100 text-gray-700 py-3 font-medium">提示</button>
+          <button class="flat-btn bg-gray-100 text-gray-700 py-3 font-medium">跳过</button>
+          <button class="flat-btn bg-primary text-white py-3 font-medium">提交答案</button>
+        </div>
+      </div>
+
+      <!-- Recommended -->
+      <div class="flat-card p-6 mb-6">
+        <h3 class="font-bold mb-4">推荐闯关</h3>
+        <div class="grid grid-cols-4 gap-3">
+          <div class="bg-gray-50 p-4 rounded-xl text-center cursor-pointer hover:bg-gray-100">
+            <div class="text-3xl mb-2">📐</div>
+            <div class="font-medium text-sm">数学·三下</div>
+            <div class="text-xs text-gray-500">第5章</div>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-xl text-center cursor-pointer hover:bg-gray-100">
+            <div class="text-3xl mb-2">📖</div>
+            <div class="font-medium text-sm">语文·三下</div>
+            <div class="text-xs text-gray-500">第3章</div>
+          </div>
+          <div class="bg-gray-50 p-4 rounded-xl text-center cursor-pointer hover:bg-gray-100">
+            <div class="text-3xl mb-2">🔤</div>
+            <div class="font-medium text-sm">英语·三下</div>
+            <div class="text-xs text-gray-500">第2章</div>
+          </div>
+          <div class="bg-accent/10 p-4 rounded-xl text-center cursor-pointer border-2 border-accent">
+            <div class="text-3xl mb-2">🏅</div>
+            <div class="font-medium text-sm text-accent">数学·奥赛</div>
+            <div class="text-xs text-gray-500">基础训练</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Achievements -->
+      <div class="flat-card p-6">
+        <h3 class="font-bold mb-4">最近成就</h3>
+        <div class="grid grid-cols-4 gap-3">
+          <div class="bg-orange-50 p-4 rounded-xl text-center">
+            <div class="text-3xl mb-1">🔥</div>
+            <div class="font-medium text-sm">连续7天</div>
+          </div>
+          <div class="bg-green-50 p-4 rounded-xl text-center">
+            <div class="text-3xl mb-1">🎯</div>
+            <div class="font-medium text-sm">首次全对</div>
+          </div>
+          <div class="bg-blue-50 p-4 rounded-xl text-center">
+            <div class="text-3xl mb-1">📝</div>
+            <div class="font-medium text-sm">答题王</div>
+          </div>
+          <div class="bg-gray-100 p-4 rounded-xl text-center opacity-50">
+            <div class="text-3xl mb-1">🔒</div>
+            <div class="font-medium text-sm">数学大师</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI_Study - 极简风格</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#2563EB',
+            background: '#FFFFFF',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-background text-gray-900 min-h-screen">
+  <!-- Minimal Header -->
+  <header class="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-md z-50 border-b border-gray-100">
+    <div class="max-w-5xl mx-auto px-8 py-5 flex items-center justify-between">
+      <div class="text-xl font-semibold tracking-tight">AI_Study</div>
+      <div class="flex items-center gap-8">
+        <a href="#" class="text-sm font-medium text-primary">首页</a>
+        <a href="#" class="text-sm text-gray-500">地图</a>
+        <a href="#" class="text-sm text-gray-500">闯关</a>
+        <a href="#" class="text-sm text-gray-500">错题</a>
+        <div class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-medium">小</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content - Lots of Whitespace -->
+  <div class="pt-32 pb-20 px-8">
+    <div class="max-w-5xl mx-auto">
+      <!-- Hero - Minimal -->
+      <div class="mb-20">
+        <h1 class="text-4xl font-bold tracking-tight mb-4">小明同学<br>继续加油</h1>
+        <p class="text-gray-500 text-lg mb-8">今天已完成 2/3 关卡 · 连续学习 7 天</p>
+        <div class="flex gap-4">
+          <button class="bg-primary text-white px-8 py-3 rounded-lg font-medium">开始闯关</button>
+          <button class="text-gray-600 px-8 py-3 rounded-lg font-medium hover:bg-gray-100">巩固错题</button>
+        </div>
+      </div>
+
+      <!-- Stats - Simple Numbers -->
+      <div class="grid grid-cols-4 gap-8 mb-16">
+        <div>
+          <div class="text-4xl font-bold">256</div>
+          <div class="text-sm text-gray-500 mt-1">总题数</div>
+        </div>
+        <div>
+          <div class="text-4xl font-bold text-green-600">78%</div>
+          <div class="text-sm text-gray-500 mt-1">正确率</div>
+        </div>
+        <div>
+          <div class="text-4xl font-bold">12h</div>
+          <div class="text-sm text-gray-500 mt-1">总用时</div>
+        </div>
+        <div>
+          <div class="text-4xl font-bold">7天</div>
+          <div class="text-sm text-gray-500 mt-1">连续学习</div>
+        </div>
+      </div>
+
+      <!-- Today's Progress - Clean -->
+      <div class="mb-16">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-xl font-semibold">今日任务</h2>
+          <span class="text-sm text-gray-500">2/3 完成</span>
+        </div>
+        <div class="w-full h-2 bg-gray-100 rounded-full">
+          <div class="h-2 bg-primary rounded-full" style="width: 70%"></div>
+        </div>
+      </div>
+
+      <!-- Cards - Ultra Minimal -->
+      <div class="grid md:grid-cols-2 gap-8 mb-16">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-semibold">错题待巩固</h3>
+            <span class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">3 题</span>
+          </div>
+          <div class="space-y-2">
+            <div class="py-3 border-b border-gray-100 text-sm">数学 · 第一章 · 乘法分配律</div>
+            <div class="py-3 border-b border-gray-100 text-sm">数学 · 第二章 · 分数加减</div>
+          </div>
+          <button class="mt-4 text-primary text-sm font-medium">立即巩固 →</button>
+        </div>
+
+        <div class="p-6">
+          <h3 class="font-semibold mb-4">推荐闯关</h3>
+          <div class="space-y-2">
+            <div class="py-3 border-b border-gray-100 text-sm flex items-center justify-between">
+              <span>数学 · 三下 · 第5章</span>
+              <span class="text-gray-400">→</span>
+            </div>
+            <div class="py-3 border-b border-gray-100 text-sm flex items-center justify-between">
+              <span>语文 · 三下 · 第3章</span>
+              <span class="text-gray-400">→</span>
+            </div>
+            <div class="py-3 border-b border-gray-100 text-sm flex items-center justify-between">
+              <span class="text-primary font-medium">数学 · 奥赛基础</span>
+              <span class="text-accent">→</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quiz - Centered Focus -->
+      <div class="max-w-xl mx-auto mb-16">
+        <div class="flex items-center gap-3 mb-6 justify-center">
+          <span class="text-xs bg-blue-100 text-primary px-3 py-1 rounded-full">数学</span>
+          <span class="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">三年级</span>
+        </div>
+        <h3 class="text-2xl font-bold text-center mb-8">25 × 17 = ?</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <button class="py-4 border border-gray-200 rounded-lg text-center hover:border-primary hover:text-primary transition-colors">A. 325</button>
+          <button class="py-4 border-2 border-primary bg-blue-50 text-primary rounded-lg text-center font-medium">B. 425</button>
+          <button class="py-4 border border-gray-200 rounded-lg text-center hover:border-primary hover:text-primary transition-colors">C. 525</button>
+          <button class="py-4 border border-gray-200 rounded-lg text-center hover:border-primary hover:text-primary transition-colors">D. 625</button>
+        </div>
+        <div class="flex gap-3 mt-6 justify-center">
+          <button class="px-6 py-3 text-gray-500 hover:text-gray-700">提示</button>
+          <button class="px-6 py-3 text-gray-500 hover:text-gray-700">跳过</button>
+          <button class="px-8 py-3 bg-primary text-white rounded-lg font-medium">提交</button>
+        </div>
+      </div>
+
+      <!-- Achievements - Minimal List -->
+      <div class="mb-16">
+        <h2 class="text-xl font-semibold mb-6">最近成就</h2>
+        <div class="flex gap-6">
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🔥</span>
+            <span class="text-sm font-medium">连续7天</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">🎯</span>
+            <span class="text-sm font-medium">首次全对</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-2xl">📝</span>
+            <span class="text-sm font-medium">答题王</span>
+          </div>
+          <div class="flex items-center gap-3 opacity-40">
+            <span class="text-2xl">🔒</span>
+            <span class="text-sm font-medium">数学大师</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer - Minimal -->
+      <footer class="border-t border-gray-100 pt-8">
+        <div class="flex items-center justify-between text-sm text-gray-400">
+          <span>AI_Study · 让学习变得有趣</span>
+          <span>1250 积分</span>
+        </div>
+      </footer>
+    </div>
+  </div>
+</body>
+</html>
