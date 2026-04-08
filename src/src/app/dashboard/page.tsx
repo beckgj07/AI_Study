@@ -42,13 +42,6 @@ export default function Dashboard() {
     { icon: '🔒', name: '数学大师', unlocked: false },
   ];
 
-  const sampleQuestion = {
-    content: '25 × 17 = ?',
-    options: ['325', '425', '525', '625'],
-    selectedIndex: 1,
-    correctIndex: 1,
-  };
-
   if (!user) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
@@ -62,36 +55,8 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      {/* Mobile Header - shown on mobile only */}
-      <header className="md:hidden bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-gray-100">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white">
-                📚
-              </div>
-              <span className="font-bold text-gray-800">AI_Study</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-orange-500">🔥 {streak}</span>
-              <Link href="/settings">
-                <Avatar name={userName} size="sm" />
-              </Link>
-            </div>
-          </div>
-          {/* Mobile Nav */}
-          <nav className="flex justify-around mt-3 pt-3 border-t border-gray-100">
-            <Link href="/map" className="text-gray-500 text-sm">🗺️</Link>
-            <Link href="/challenge" className="text-gray-500 text-sm">🎯</Link>
-            <Link href="/quiz" className="text-gray-500 text-sm">📝</Link>
-            <Link href="/wrong" className="text-gray-500 text-sm">❌</Link>
-            <Link href="/settings" className="text-gray-500 text-sm">⚙️</Link>
-          </nav>
-        </div>
-      </header>
-
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="p-6">
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-800 mb-2">

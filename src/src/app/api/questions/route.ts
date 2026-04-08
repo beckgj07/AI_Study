@@ -1,33 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
-// GET /api/questions - Get questions for a chapter
+// GET /api/questions - Get questions with flexible filtering
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const chapterId = searchParams.get('chapterId');
+    const subjectId = searchParams.get('subjectId');
+    const grade = searchParams.get('grade');
+    const type = searchParams.get('type');
     const difficulty = searchParams.get('difficulty');
-    const count = parseInt(searchParams.get('count') || '10');
+    const count = parseInt(searchParams.get('count') || '50');
 
-    if (!chapterId) {
-      return NextResponse.json(
-        { success: false, error: '章节ID不能为空' },
-        { status: 400 }
-      );
+    // Build where clause
+    const where: Record<string, unknown> = {};
+
+    if (chapterId) {
+      where.chapterId = chapterId;
     }
 
-    const where: Record<string, unknown> = { chapterId };
     if (difficulty) {
       where.difficulty = parseInt(difficulty);
+    }
+
+    if (type) {
+      where.type = type;
+    }
+
+    // Filter by subject and grade via chapter -> unit -> course -> subject
+    if (subjectId || grade) {
+      where.chapter = {
+        unit: {
+          course: {
+            subjectId: subjectId || undefined,
+            grade: grade ? parseInt(grade) : undefined,
+          }
+        }
+      };
     }
 
     const questions = await prisma.question.findMany({
       where,
       take: count,
-      orderBy: { difficulty: 'asc' },
+      orderBy: [
+        { difficulty: 'asc' },
+        { createdAt: 'desc' }
+      ],
+      include: {
+        chapter: {
+          include: {
+            unit: {
+              include: {
+                course: {
+                  include: { subject: true }
+                }
+              }
+            }
+          }
+        }
+      }
     });
 
-    return NextResponse.json({ success: true, data: questions });
+    // Transform data to include subject and grade info
+    const questionsWithMeta = questions.map(q => ({
+      id: q.id,
+      type: q.type,
+      difficulty: q.difficulty,
+      content: q.content,
+      options: q.options,
+      answer: q.answer,
+      explanation: q.explanation,
+      knowledgePoint: q.knowledgePoint,
+      source: q.source,
+      createdAt: q.createdAt,
+      textbookName: q.chapter?.unit?.course?.subject?.name + ' ' + q.chapter?.unit?.course?.grade + '年级',
+      subjectId: q.chapter?.unit?.course?.subjectId,
+      grade: q.chapter?.unit?.course?.grade,
+    }));
+
+    return NextResponse.json({ success: true, data: questionsWithMeta });
   } catch (error) {
     console.error('Failed to fetch questions:', error);
     return NextResponse.json(

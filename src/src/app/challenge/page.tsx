@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ClayCard, ClayButton, Badge } from '@/components/ClayCard';
 import { PageHeader } from '@/components/Layout';
+import { SUBJECTS, GRADES, QUESTION_TYPE_LABELS, QUESTION_TYPE_ICONS, DIFFICULTY_LABELS, SUBJECT_QUESTION_TYPES } from '@/lib/question-types';
 
 interface Chapter {
   id: string;
@@ -95,12 +96,33 @@ export default function ChallengePage() {
   const [questionCount, setQuestionCount] = useState(10);
   const [selectedDifficulty, setSelectedDifficulty] = useState(1);
   const [selectedMode, setSelectedMode] = useState<'practice' | 'exam'>('practice');
+  const [questionSource, setQuestionSource] = useState<'chapter' | 'bank'>('chapter');
+
+  // 题库模式筛选条件
+  const [bankFilters, setBankFilters] = useState({
+    subjectId: 'math',
+    grade: 3,
+    type: 'choice',
+    difficulty: 0,
+  });
 
   const currentSubject = mockSubjects.find((s) => s.id === selectedSubject);
+  const availableTypes = SUBJECT_QUESTION_TYPES[bankFilters.subjectId] || [];
 
   const handleStartChallenge = () => {
-    if (selectedChapter) {
+    if (questionSource === 'chapter' && selectedChapter) {
       window.location.href = `/quiz?chapterId=${selectedChapter.id}&count=${questionCount}&difficulty=${selectedDifficulty}&mode=${selectedMode}`;
+    } else if (questionSource === 'bank') {
+      const params = new URLSearchParams({
+        source: 'bank',
+        subjectId: bankFilters.subjectId,
+        grade: bankFilters.grade.toString(),
+        type: bankFilters.type,
+        difficulty: bankFilters.difficulty.toString(),
+        count: questionCount.toString(),
+        mode: selectedMode,
+      });
+      window.location.href = `/quiz?${params.toString()}`;
     }
   };
 
@@ -122,8 +144,104 @@ export default function ChallengePage() {
       <main className="max-w-6xl mx-auto px-4 py-6">
         <PageHeader title="选择关卡" subtitle="完成关卡解锁下一章" />
 
-        {/* Subject Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+        {/* Question Source Toggle */}
+        <ClayCard className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg font-bold text-gray-800">📋 题目来源</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setQuestionSource('chapter')}
+              className={`p-4 rounded-xl text-center transition-all ${
+                questionSource === 'chapter'
+                  ? 'bg-blue-500 text-white shadow-lg'
+                  : 'clay-inset hover:bg-gray-50'
+              }`}
+            >
+              <span className="text-2xl mb-1 block">📖</span>
+              <span className="font-medium">教材章节</span>
+              <p className="text-xs mt-1 opacity-80">按课本章节顺序练习</p>
+            </button>
+            <button
+              onClick={() => setQuestionSource('bank')}
+              className={`p-4 rounded-xl text-center transition-all ${
+                questionSource === 'bank'
+                  ? 'bg-blue-500 text-white shadow-lg'
+                  : 'clay-inset hover:bg-gray-50'
+              }`}
+            >
+              <span className="text-2xl mb-1 block">📚</span>
+              <span className="font-medium">智能题库</span>
+              <p className="text-xs mt-1 opacity-80">按条件筛选组卷</p>
+            </button>
+          </div>
+        </ClayCard>
+
+        {/* Question Bank Filters - Only show when bank mode is selected */}
+        {questionSource === 'bank' && (
+          <ClayCard className="mb-6 bg-gradient-to-br from-indigo-50 to-blue-50">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-lg font-bold text-gray-800">🎯 智能组卷</span>
+              <Badge variant="primary">按条件筛选</Badge>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">科目</label>
+                <select
+                  value={bankFilters.subjectId}
+                  onChange={(e) => setBankFilters({ ...bankFilters, subjectId: e.target.value, type: '' })}
+                  className="w-full p-2.5 clay-input text-sm"
+                >
+                  {SUBJECTS.map(s => (
+                    <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">年级</label>
+                <select
+                  value={bankFilters.grade}
+                  onChange={(e) => setBankFilters({ ...bankFilters, grade: parseInt(e.target.value) })}
+                  className="w-full p-2.5 clay-input text-sm"
+                >
+                  {GRADES.map(g => (
+                    <option key={g} value={g}>{g}年级</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">题型</label>
+                <select
+                  value={bankFilters.type}
+                  onChange={(e) => setBankFilters({ ...bankFilters, type: e.target.value })}
+                  className="w-full p-2.5 clay-input text-sm"
+                >
+                  <option value="">全部题型</option>
+                  {availableTypes.map(t => (
+                    <option key={t} value={t}>{QUESTION_TYPE_ICONS[t]} {QUESTION_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">难度</label>
+                <select
+                  value={bankFilters.difficulty}
+                  onChange={(e) => setBankFilters({ ...bankFilters, difficulty: parseInt(e.target.value) })}
+                  className="w-full p-2.5 clay-input text-sm"
+                >
+                  <option value={0}>全部难度</option>
+                  {DIFFICULTY_LABELS.map((label, i) => (
+                    <option key={i + 1} value={i + 1}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </ClayCard>
+        )}
+
+        {/* Subject Tabs - Only show when chapter mode is selected */}
+        {questionSource === 'chapter' && (
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           {mockSubjects.map((subject) => (
             <button
               key={subject.id}
@@ -139,9 +257,11 @@ export default function ChallengePage() {
             </button>
           ))}
         </div>
+        )}
 
-        {/* Units and Chapters */}
-        <div className="space-y-6">
+        {/* Units and Chapters - Only show when chapter mode is selected */}
+        {questionSource === 'chapter' && (
+          <div className="space-y-6">
           {currentSubject?.units.map((unit) => (
             <ClayCard key={unit.id}>
               <h3 className="font-bold text-lg text-gray-800 mb-4">{unit.name}</h3>
@@ -180,9 +300,11 @@ export default function ChallengePage() {
             </ClayCard>
           ))}
         </div>
+        )}
 
-        {/* Competition Challenges */}
-        <ClayCard className="mt-6 bg-gradient-to-br from-orange-50 to-yellow-50 border-2 border-orange-200">
+        {/* Competition Challenges - Only show when chapter mode is selected */}
+        {questionSource === 'chapter' && (
+          <ClayCard className="mt-6 bg-gradient-to-br from-orange-50 to-yellow-50 border-2 border-orange-200">
           <div className="flex items-center gap-3 mb-4">
             <span className="text-3xl">🏅</span>
             <div>
@@ -226,6 +348,7 @@ export default function ChallengePage() {
             </button>
           </div>
         </ClayCard>
+        )}
       </main>
 
       {/* Challenge Config Modal */}
