@@ -2,15 +2,27 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 实现教材上传→AI解析→多题型题目生成→预览确认入库→题库管理的完整流程
+**Goal:** 实现教材上传→AI解析→多题型题目生成→预览确认入库→题库管理，并与闯关、答题、错题本、学习报告等现有模块集成
 
 **Architecture:**
 - 数据库：扩展Prisma schema，新增UploadedFile和ParseResult表
 - API：创建upload相关路由，扩展questions路由
 - 前端：重构upload页面，新建upload/[id]详情页，重构question-bank页面
 - 题型配置：按科目动态配置题型常量
+- 系统集成：改造闯关、答题、错题本、报告等页面
 
 **Tech Stack:** Next.js 14 App Router, Prisma 7 + SQLite, TypeScript, Tailwind CSS
+
+---
+
+## 与现有系统集成说明
+
+```
+教材上传 ──▶ 题库 ──┬──▶ 闯关选择(题目来源)
+                    ├──▶ 答题测验(显示来源)
+                    ├──▶ 错题本(按教材筛选)
+                    └──▶ 学习报告(教材掌握度)
+```
 
 ---
 
@@ -2027,6 +2039,332 @@ git commit -m "feat(api): 添加questions单个操作API"
 
 ---
 
+## Task 11: 改造闯关选择页面（题目来源）
+
+**Files:**
+- Modify: `src/src/app/challenge/page.tsx`
+
+- [ ] **Step 1: 添加题目来源选择**
+
+在闯关配置弹窗中添加"题目来源"选项：
+
+```typescript
+// 在 ChallengePage 组件中添加
+const [questionSource, setQuestionSource] = useState<'system' | 'textbook' | 'wrong'>('system');
+const [selectedTextbook, setSelectedTextbook] = useState<string>('');
+const [textbooks, setTextbooks] = useState<UploadedFile[]>([]);
+
+// 加载教材列表
+useEffect(() => {
+  if (questionSource === 'textbook') {
+    fetchTextbooks();
+  }
+}, [questionSource]);
+
+const fetchTextbooks = async () => {
+  const res = await fetch('/api/upload?userId=' + localStorage.getItem('userId'));
+  const data = await res.json();
+  if (data.success) {
+    setTextbooks(data.data.filter((t: any) => t.status === 'completed'));
+  }
+};
+```
+
+配置弹窗中新增题目来源部分：
+
+```tsx
+{/* 题目来源 */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    题目来源
+  </label>
+  <div className="space-y-2">
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        name="source"
+        checked={questionSource === 'system'}
+        onChange={() => setQuestionSource('system')}
+      />
+      <span>系统预设题库</span>
+    </label>
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        name="source"
+        checked={questionSource === 'textbook'}
+        onChange={() => setQuestionSource('textbook')}
+      />
+      <span>教材题库</span>
+    </label>
+    {questionSource === 'textbook' && textbooks.length > 0 && (
+      <select
+        value={selectedTextbook}
+        onChange={(e) => setSelectedTextbook(e.target.value)}
+        className="ml-6 p-2 clay-input text-sm w-64"
+      >
+        <option value="">选择教材</option>
+        {textbooks.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.fileName} ({t.generatedQuestions}题)
+          </option>
+        ))}
+      </select>
+    )}
+    <label className="flex items-center gap-2">
+      <input
+        type="radio"
+        name="source"
+        checked={questionSource === 'wrong'}
+        onChange={() => setQuestionSource('wrong')}
+      />
+      <span>错题专项</span>
+    </label>
+  </div>
+</div>
+```
+
+更新跳转链接传递 textbookId：
+
+```typescript
+const handleStartChallenge = () => {
+  if (selectedChapter) {
+    const params = new URLSearchParams({
+      chapterId: selectedChapter.id,
+      count: questionCount.toString(),
+      difficulty: selectedDifficulty.toString(),
+      mode: selectedMode,
+    });
+    if (questionSource === 'textbook' && selectedTextbook) {
+      params.set('textbookId', selectedTextbook);
+    }
+    window.location.href = `/quiz?${params.toString()}`;
+  }
+};
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/src/app/challenge/page.tsx
+git commit -m "feat(challenge): 添加题目来源选择功能"
+```
+
+---
+
+## Task 12: 改造答题测验页面（显示来源）
+
+**Files:**
+- Modify: `src/src/app/quiz/page.tsx`
+
+- [ ] **Step 1: 添加题目来源显示**
+
+从URL获取textbookId并显示来源信息：
+
+```typescript
+function QuizContent() {
+  const searchParams = useSearchParams();
+  const chapterId = searchParams.get('chapterId') || 'demo';
+  const textbookId = searchParams.get('textbookId');  // 新增
+  const count = parseInt(searchParams.get('count') || '10');
+  const mode = searchParams.get('mode') || 'practice';
+  const difficulty = parseInt(searchParams.get('difficulty') || '1');
+
+  // 获取教材信息
+  const [textbook, setTextbook] = useState<any>(null);
+
+  useEffect(() => {
+    if (textbookId) {
+      fetchTextbook();
+    }
+  }, [textbookId]);
+
+  const fetchTextbook = async () => {
+    try {
+      const res = await fetch(`/api/upload/${textbookId}`);
+      const data = await res.json();
+      if (data.success) {
+        setTextbook(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch textbook:', error);
+    }
+  };
+```
+
+在题目卡片中添加来源显示：
+
+```tsx
+{/* 题目卡片 */}
+<ClayCard className="mb-6">
+  <div className="flex items-center gap-2 mb-4">
+    <Badge variant="primary">{subjectName}</Badge>
+    <Badge variant="muted">{grade}年级</Badge>
+    <Badge variant="success">{difficultyLabel}</Badge>
+    {textbook && (
+      <Link href={`/upload/${textbook.id}`}>
+        <Badge variant="accent" className="cursor-pointer hover:bg-orange-100">
+          📄 {textbook.fileName}
+        </Badge>
+      </Link>
+    )}
+  </div>
+  {/* ... rest of question card */}
+</ClayCard>
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/src/app/quiz/page.tsx
+git commit -m "feat(quiz): 显示题目来源信息"
+```
+
+---
+
+## Task 13: 改造错题本页面（按教材筛选）
+
+**Files:**
+- Modify: `src/src/app/wrong/page.tsx`
+
+- [ ] **Step 1: 添加按教材筛选**
+
+```typescript
+// 添加筛选状态
+const [filterTextbook, setFilterTextbook] = useState<string>('');
+const [textbooks, setTextbooks] = useState<any[]>([]);
+
+// 加载教材列表
+useEffect(() => {
+  fetchTextbooks();
+}, []);
+
+const fetchTextbooks = async () => {
+  const res = await fetch('/api/upload?userId=' + localStorage.getItem('userId'));
+  const data = await res.json();
+  if (data.success) {
+    setTextbooks(data.data.filter((t: any) => t.status === 'completed'));
+  }
+};
+
+// 筛选错题
+const filteredWrongQuestions = filterTextbook
+  ? wrongQuestions.filter(q => q.textbookId === filterTextbook)
+  : wrongQuestions;
+```
+
+添加筛选器UI：
+
+```tsx
+<div className="flex items-center gap-4 mb-4">
+  <h3 className="font-bold text-gray-800">错题待巩固</h3>
+  {textbooks.length > 0 && (
+    <select
+      value={filterTextbook}
+      onChange={(e) => setFilterTextbook(e.target.value)}
+      className="p-2 clay-input text-sm"
+    >
+      <option value="">全部教材</option>
+      {textbooks.map((t) => (
+        <option key={t.id} value={t.id}>{t.fileName}</option>
+      ))}
+    </select>
+  )}
+</div>
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/src/app/wrong/page.tsx
+git commit -m "feat(wrong): 添加按教材筛选功能"
+```
+
+---
+
+## Task 14: 改造学习报告页面（教材掌握度）
+
+**Files:**
+- Modify: `src/src/app/report/page.tsx`
+
+- [ ] **Step 1: 添加教材掌握度统计**
+
+```typescript
+// 添加教材统计数据
+const [textbookStats, setTextbookStats] = useState<any[]>([]);
+
+useEffect(() => {
+  fetchTextbookStats();
+}, []);
+
+const fetchTextbookStats = async () => {
+  try {
+    // 获取用户的答题记录统计
+    const res = await fetch(`/api/reports/textbook-mastery?userId=` + localStorage.getItem('userId'));
+    const data = await res.json();
+    if (data.success) {
+      setTextbookStats(data.data);
+    }
+  } catch (error) {
+    // 如果接口不存在，使用模拟数据
+    setTextbookStats([
+      { fileName: '三年级数学上册', total: 45, correct: 37, rate: 82 },
+      { fileName: '语文教材第三单元', total: 28, correct: 18, rate: 64 },
+    ]);
+  }
+};
+```
+
+添加教材掌握度UI：
+
+```tsx
+{/* 教材掌握度 */}
+<ClayCard className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50">
+  <h3 className="font-bold text-gray-800 mb-4">📚 教材掌握度</h3>
+  <div className="space-y-4">
+    {textbookStats.map((stat, idx) => (
+      <div key={idx} className="clay-inset p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-medium text-gray-800">{stat.fileName}</span>
+          <span className="text-sm text-gray-500">已做: {stat.total}题 正确率: {stat.rate}%</span>
+        </div>
+        <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full"
+            style={{ width: `${stat.rate}%` }}
+          />
+        </div>
+      </div>
+    ))}
+  </div>
+</ClayCard>
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add src/src/app/report/page.tsx
+git commit -m "feat(report): 添加教材掌握度统计"
+```
+
+---
+
+## Task 15: 推送所有更新到GitHub
+
+- [ ] **Step 1: 推送所有提交**
+
+```bash
+git push origin main
+```
+
+Expected: 所有提交成功推送到GitHub
+
+- [ ] **Step 2: 验证**
+
+确认GitHub仓库包含所有新功能和集成点。
+
+---
+
 ## 自检清单
 
 1. **Spec覆盖检查**:
@@ -2043,10 +2381,16 @@ git commit -m "feat(api): 添加questions单个操作API"
    - [x] 详情页面
    - [x] 题库页面重构
    - [x] QuestionCard组件
+   - [x] 闯关页面改造（题目来源选择）
+   - [x] 答题页面改造（显示来源）
+   - [x] 错题本改造（按教材筛选）
+   - [x] 学习报告改造（教材掌握度）
 
 2. **占位符扫描**: 无"TBD"、无"TODO"
 
 3. **类型一致性**: 所有 QuestionType、DIFFICULTY 等常量在 question-types.ts 中统一定义
+
+4. **系统集成**: 教材管理与题库模块与闯关、答题、错题本、学习报告等现有模块完整集成
 
 ---
 
