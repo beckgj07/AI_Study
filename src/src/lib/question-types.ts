@@ -94,6 +94,12 @@ export const SUBJECTS = [
 // 年级选项
 export const GRADES = [1, 2, 3, 4, 5, 6];
 
+// 学期选项
+export const SEMESTERS = [
+  { id: 1, name: '上册' },
+  { id: 2, name: '下册' },
+];
+
 // 教材版本
 export const TEXTBOOK_VERSIONS = [
   { id: 'pep', name: '人教版' },

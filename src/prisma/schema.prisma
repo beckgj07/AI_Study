@@ -49,6 +49,7 @@ model Subject {
   // 关联
   textbookVersions TextbookVersion[]
   userSubjects     UserSubject[]
+  textbooks        Textbook[]
   courses          Course[]
 }
 
@@ -63,6 +64,26 @@ model TextbookVersion {
   // 关联
   subject     Subject      @relation(fields: [subjectId], references: [id])
   userSubjects UserSubject[]
+  textbooks   Textbook[]
+}
+
+// 教材 (Textbook)
+model Textbook {
+  id        String   @id @default(cuid())
+  name      String             // 教材名称
+  subjectId String
+  grade     Int                // 年级
+  semester  Int    @default(1) // 学期 1=上册, 2=下册
+  versionId String
+  filePath  String?           // 文件路径
+  status    String @default("uploaded") // uploaded/parsing/generating/completed/error
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联
+  subject         Subject          @relation(fields: [subjectId], references: [id])
+  textbookVersion TextbookVersion @relation(fields: [versionId], references: [id])
+  units           Unit[]
 }
 
 // 用户科目绑定 (UserSubject)
@@ -83,7 +104,7 @@ model UserSubject {
   @@unique([userId, subjectId, grade])
 }
 
-// 课程 (Course) - 科目+年级
+// 课程 (Course) - 科目+年级 (已废弃，改用 Textbook)
 model Course {
   id        String   @id @default(cuid())
   name      String
@@ -93,7 +114,6 @@ model Course {
 
   // 关联
   subject Subject @relation(fields: [subjectId], references: [id])
-  units   Unit[]
 }
 
 // 单元 (Unit)
@@ -101,11 +121,11 @@ model Unit {
   id        String   @id @default(cuid())
   name      String
   order     Int      @default(0)
-  courseId  String
+  textbookId String
   createdAt DateTime @default(now())
 
   // 关联
-  course   Course    @relation(fields: [courseId], references: [id])
+  textbook Textbook  @relation(fields: [textbookId], references: [id])
   chapters Chapter[]
 }
 
@@ -141,6 +161,11 @@ model Question {
   chapter       Chapter        @relation(fields: [chapterId], references: [id])
   answerRecords AnswerRecord[]
   wrongQuestions WrongQuestion[]
+
+  // 冗余字段方便查询
+  @@index([chapterId])
+  @@index([type])
+  @@index([difficulty])
 }
 
 // 答题记录 (AnswerRecord)

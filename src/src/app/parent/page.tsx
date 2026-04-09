@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ClayCard, ClayButton, Badge, Avatar } from '@/components/ClayCard';
+import { ClayCard, ClayButton, Badge, Avatar, ClayInput } from '@/components/ClayCard';
 import { PageHeader } from '@/components/Layout';
 
 interface Child {
@@ -10,6 +10,7 @@ interface Child {
   name: string;
   grade: number;
   avatar?: string;
+  parentId?: string;
   stats: {
     totalPoints: number;
     streak: number;
@@ -18,18 +19,78 @@ interface Child {
   };
 }
 
-const mockChildren: Child[] = [
-  {
-    id: '1',
-    name: '小明',
-    grade: 3,
-    stats: { totalPoints: 1250, streak: 7, correctRate: 78, achievements: 12 },
-  },
-];
-
 export default function ParentPage() {
-  const [selectedChild, setSelectedChild] = useState<Child | null>(mockChildren[0]);
+  const [children, setChildren] = useState<Child[]>([]);
+  const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [showAddChild, setShowAddChild] = useState(false);
+  const [newChildName, setNewChildName] = useState('');
+  const [newChildGrade, setNewChildGrade] = useState(2);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // 从 localStorage 获取当前家长用户
+  useEffect(() => {
+    const user = localStorage.getItem('currentUser');
+    if (user) {
+      const userData = JSON.parse(user);
+      setCurrentUser(userData);
+      // 获取孩子列表
+      fetchChildren();
+    }
+  }, []);
+
+  const fetchChildren = () => {
+    // 获取所有孩子账号（家长可以看到所有孩子）
+    fetch('/api/users?role=child')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data.length > 0) {
+          const childrenData = data.data.map((child: any) => ({
+            id: child.id,
+            name: child.name,
+            grade: child.grade || 0,
+            avatar: child.avatar,
+            parentId: child.parentId,
+            stats: {
+              totalPoints: child.totalPoints || 0,
+              streak: 0,
+              correctRate: 0,
+              achievements: child._count?.achievements || 0,
+            },
+          }));
+          setChildren(childrenData);
+          if (childrenData.length > 0 && !selectedChild) {
+            setSelectedChild(childrenData[0]);
+          }
+        }
+      })
+      .catch(console.error);
+  };
+
+  const handleAddChild = async () => {
+    if (!newChildName.trim() || !currentUser) return;
+
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newChildName.trim(),
+          role: 'child',
+          parentId: currentUser.id,
+          grade: newChildGrade,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowAddChild(false);
+        setNewChildName('');
+        setNewChildGrade(2);
+        fetchChildren(); // 刷新列表
+      }
+    } catch (error) {
+      console.error('Failed to add child:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -58,7 +119,9 @@ export default function ParentPage() {
             </ClayButton>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-2">
-            {mockChildren.map((child) => (
+            {children.length === 0 ? (
+              <p className="text-gray-500 text-sm py-2">暂无关联的孩子账号</p>
+            ) : children.map((child) => (
               <button
                 key={child.id}
                 onClick={() => setSelectedChild(child)}
@@ -196,6 +259,45 @@ export default function ParentPage() {
           </>
         )}
       </main>
+
+      {/* 添加孩子弹窗 */}
+      {showAddChild && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <ClayCard className="w-full max-w-md">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">添加孩子账号</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">孩子姓名</label>
+                <ClayInput
+                  value={newChildName}
+                  onChange={(e) => setNewChildName(e.target.value)}
+                  placeholder="请输入孩子姓名"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">年级</label>
+                <select
+                  value={newChildGrade}
+                  onChange={(e) => setNewChildGrade(parseInt(e.target.value))}
+                  className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+                >
+                  {[1, 2, 3, 4, 5, 6].map(g => (
+                    <option key={g} value={g}>{g}年级</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <ClayButton variant="secondary" className="flex-1" onClick={() => setShowAddChild(false)}>
+                取消
+              </ClayButton>
+              <ClayButton className="flex-1" onClick={handleAddChild} disabled={!newChildName.trim()}>
+                添加
+              </ClayButton>
+            </div>
+          </ClayCard>
+        </div>
+      )}
     </div>
   );
 }

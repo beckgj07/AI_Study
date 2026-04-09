@@ -106,11 +106,17 @@ export default function InitPage() {
       }
 
       // Update user grade
-      await fetch(`/api/users/${userId}`, {
+      const updateRes = await fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grade }),
       });
+      const updateData = await updateRes.json();
+
+      // 更新 localStorage 中的 currentUser
+      if (updateData.success && updateData.data) {
+        localStorage.setItem('currentUser', JSON.stringify(updateData.data));
+      }
 
       router.push('/dashboard');
     } catch (error) {

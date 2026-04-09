@@ -24,7 +24,7 @@ const navItems: NavItem[] = [
   { icon: '📊', label: '学习报告', href: '/report' },
   { icon: '🏆', label: '成就墙', href: '/achievements' },
   { icon: '📅', label: '每日打卡', href: '/checkin' },
-  { icon: '📤', label: '教材上传', href: '/upload', divider: true },
+  { icon: '📤', label: '教材管理', href: '/upload', divider: true },
   { icon: '📚', label: '我的题库', href: '/question-bank' },
   { icon: '⚙️', label: '个人设置', href: '/settings' },
   { icon: '👨‍👩‍👧', label: '家长端', href: '/parent' },

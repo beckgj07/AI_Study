@@ -1,696 +1,1239 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import { ClayCard, ClayButton, Badge, ProgressBar } from '@/components/ClayCard';
-import { SUBJECTS, GRADES, TEXTBOOK_VERSIONS, SUBJECT_QUESTION_TYPES, QUESTION_TYPE_LABELS, QUESTION_TYPE_ICONS, DIFFICULTY_LABELS } from '@/lib/question-types';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ClayCard, ClayButton, Badge } from '@/components/ClayCard';
+import { SUBJECTS, GRADES, TEXTBOOK_VERSIONS, SEMESTERS, QUESTION_TYPE_LABELS, QUESTION_TYPE_ICONS, SUBJECT_QUESTION_TYPES } from '@/lib/question-types';
 
-interface UploadFile {
-  id: string;
-  fileName: string;
-  fileSize: number;
-  subjectId: string;
-  grade: number;
-  textbookVersionId?: string;
-  status: 'uploaded' | 'parsing' | 'generating' | 'completed' | 'error';
-  parseProgress: number;
-  generatedQuestions: number;
-  questionTypes?: string;
-  createdAt: string;
+interface Unit {
+  name: string;
+  count: number;
+  types: string[];
 }
 
-// 模拟数据
-const mockFiles: UploadFile[] = [
-  {
-    id: '1',
-    fileName: '三年级数学上册.pdf',
-    fileSize: 2.5 * 1024 * 1024,
-    subjectId: 'math',
-    grade: 3,
-    textbookVersionId: 'pep',
-    status: 'completed',
-    parseProgress: 100,
-    generatedQuestions: 45,
-    questionTypes: JSON.stringify({ questionTypes: ['choice', 'calc', 'application'] }),
-    createdAt: '2024-03-20',
-  },
-  {
-    id: '2',
-    fileName: '语文教材第三单元.docx',
-    fileSize: 1.2 * 1024 * 1024,
-    subjectId: 'chinese',
-    grade: 3,
-    textbookVersionId: 'pep',
-    status: 'generating',
-    parseProgress: 65,
-    generatedQuestions: 0,
-    questionTypes: JSON.stringify({ questionTypes: ['choice', 'reading'] }),
-    createdAt: '2024-03-19',
-  },
-];
+interface QuestionStats {
+  total: number;
+  byUnit: Unit[];
+  byType: Record<string, number>;
+}
+
+interface Textbook {
+  id: string;
+  name: string;
+  subjectId: string;
+  grade: number;
+  semester: number;
+  versionId: string;
+  status: 'uploaded' | 'parsing' | 'generating' | 'completed' | 'error';
+  parseProgress: number;
+  questionStats?: QuestionStats;
+  uploadedAt: string;
+  subject?: { id: string; name: string; icon: string };
+  textbookVersion?: { id: string; name: string };
+}
 
 export default function UploadPage() {
-  const [files, setFiles] = useState<UploadFile[]>(mockFiles);
-  const [dragOver, setDragOver] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [config, setConfig] = useState({
-    subjectId: 'math',
-    grade: 3,
-    textbookVersionId: 'pep',
-    questionTypes: ['choice'] as string[],
-    countsPerType: { choice: 5 } as Record<string, number>,
-    difficultyDistribution: [true, true, false, false] as boolean[],
-    useGlobalCount: true,
-    globalCount: 10,
+  const [user, setUser] = useState<{ name: string; grade?: number } | null>(null);
+  const [textbooks, setTextbooks] = useState<Textbook[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showUpload, setShowUpload] = useState(false);
+  const [selectedTextbook, setSelectedTextbook] = useState<Textbook | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const [detailTab, setDetailTab] = useState<'content' | 'outline' | 'stats'>('content');
+  const [questionList, setQuestionList] = useState<any[]>([]);
+  const [showQuestionDetail, setShowQuestionDetail] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState<any>(null);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [unitQuestions, setUnitQuestions] = useState<{unitId: string, unitName: string, questions: any[]}[]>([]);
+  const [showChapterDetail, setShowChapterDetail] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState<any>(null);
+  const [questionFilter, setQuestionFilter] = useState('all');
+
+  // 筛选条件
+  const [filters, setFilters] = useState({
+    grade: 0, // 0表示全部年级
+    subjectId: '',
+    versionId: '',
+    semester: 0,
   });
 
-  // 获取题型配置
-  const availableTypes = SUBJECT_QUESTION_TYPES[config.subjectId] || ['choice'];
+  // 上传配置
+  const [uploadConfig, setUploadConfig] = useState({
+    subjectId: 'math',
+    grade: 3,
+    semester: 1,
+    versionId: 'pep',
+    questionTypes: ['choice'],
+    difficultyDistribution: [true, true, false, false],
+    countsPerType: { choice: 10 },
+  });
 
-  // 计算总题目数
-  const totalCount = config.useGlobalCount
-    ? config.questionTypes.length * config.globalCount
-    : Object.values(config.countsPerType).reduce((sum, c) => sum + c, 0);
+  // 文件上传状态
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // 更新每种题型的数量
-  const setCountForType = (type: string, count: number) => {
-    setConfig({
-      ...config,
-      countsPerType: { ...config.countsPerType, [type]: count },
-    });
-  };
-
-  // 快捷设置每种题型数量
-  const setAllCounts = (count: number) => {
-    const newCounts: Record<string, number> = {};
-    config.questionTypes.forEach(t => { newCounts[t] = count; });
-    setConfig({
-      ...config,
-      globalCount: count,
-      countsPerType: newCounts,
-    });
-  };
-
-  // 切换题型时初始化数量
-  const toggleQuestionType = (type: string) => {
-    const types = config.questionTypes.includes(type)
-      ? config.questionTypes.filter(t => t !== type)
-      : [...config.questionTypes, type];
-    const newCounts = { ...config.countsPerType };
-    if (!config.questionTypes.includes(type)) {
-      newCounts[type] = config.globalCount;
-    } else {
-      delete newCounts[type];
+  // 加载教材数据
+  useEffect(() => {
+    const currentUser = localStorage.getItem('currentUser');
+    if (currentUser) {
+      const userData = JSON.parse(currentUser);
+      setUser(userData);
+      if (userData.grade) {
+        setFilters(prev => ({ ...prev, grade: userData.grade }));
+        setUploadConfig(prev => ({ ...prev, grade: userData.grade }));
+      }
     }
-    setConfig({ ...config, questionTypes: types, countsPerType: newCounts });
+    fetchTextbooks();
+  }, []);
+
+  const fetchTextbooks = async () => {
+    try {
+      const res = await fetch('/api/textbooks');
+      const data = await res.json();
+      if (data.success) {
+        // 计算每个教材的题目统计
+        const textbooksWithStats = data.data.map((t: any) => {
+          if (t.units && t.units.length > 0) {
+            let total = 0;
+            const byType: Record<string, number> = {};
+            const byUnit = t.units.map((unit: any) => {
+              let unitTotal = 0;
+              const types = new Set<string>();
+              unit.chapters?.forEach((chapter: any) => {
+                const count = chapter._count?.questions || 0;
+                unitTotal += count;
+                total += count;
+                // 假设每种题型数量相等
+                const typeCount = 5; // choice, fill, truefalse, calc, application
+                const eachTypeCount = Math.floor(count / typeCount);
+                ['choice', 'fill', 'truefalse', 'calc', 'application'].forEach(type => {
+                  byType[type] = (byType[type] || 0) + eachTypeCount;
+                  types.add(type);
+                });
+              });
+              return { name: unit.name, count: unitTotal, types: Array.from(types) };
+            });
+            return {
+              ...t,
+              questionStats: { total, byUnit, byType }
+            };
+          }
+          return t;
+        });
+        setTextbooks(textbooksWithStats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch textbooks:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // 获取科目名称
+  // 筛选教材
+  const filteredTextbooks = textbooks.filter(t => {
+    if (filters.grade && t.grade !== filters.grade) return false;
+    if (filters.subjectId && t.subjectId !== filters.subjectId) return false;
+    if (filters.versionId && t.versionId !== filters.versionId) return false;
+    if (filters.semester && t.semester !== filters.semester) return false;
+    return true;
+  });
+
+  // 统计
+  const stats = {
+    total: filteredTextbooks.length,
+    completed: filteredTextbooks.filter(t => t.status === 'completed').length,
+    generating: filteredTextbooks.filter(t => t.status === 'generating' || t.status === 'parsing').length,
+    totalQuestions: filteredTextbooks.reduce((sum, t) => sum + (t.questionStats?.total || 0), 0),
+  };
+
+  // 获取科目/版本名称
   const getSubjectName = (id: string) => SUBJECTS.find(s => s.id === id)?.name || id;
   const getSubjectIcon = (id: string) => SUBJECTS.find(s => s.id === id)?.icon || '📄';
   const getVersionName = (id: string) => TEXTBOOK_VERSIONS.find(v => v.id === id)?.name || id;
 
-  // 格式化文件大小
+  // 文件大小格式化
   const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  // 获取状态显示
-  const getStatusDisplay = (status: string, progress: number) => {
-    switch (status) {
-      case 'uploaded':
-        return { badge: <Badge variant="muted">待解析</Badge>, progress: 0 };
-      case 'parsing':
-        return { badge: <Badge variant="primary">解析中</Badge>, progress };
-      case 'generating':
-        return { badge: <Badge variant="primary">生成中</Badge>, progress };
-      case 'completed':
-        return { badge: <Badge variant="success">已完成</Badge>, progress: 100 };
-      case 'error':
-        return { badge: <Badge variant="error">失败</Badge>, progress: 0 };
-      default:
-        return { badge: <Badge variant="muted">{status}</Badge>, progress: 0 };
+  // 获取文件图标
+  const getFileIcon = (fileName: string) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'pdf': return '📕';
+      case 'doc':
+      case 'docx': return '📘';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif': return '🖼️';
+      default: return '📄';
     }
   };
 
-  // 处理拖拽
+  // 处理文件选择
+  const handleFileSelect = (files: FileList | null) => {
+    if (files && files.length > 0) {
+      setSelectedFile(files[0]);
+    }
+  };
+
+  // 拖拽处理
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(true);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
     setDragOver(false);
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    if (droppedFiles.length > 0) {
-      setSelectedFile(droppedFiles[0]);
-      setShowConfig(true);
-    }
+    handleFileSelect(e.dataTransfer.files);
   }, []);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    if (selectedFiles.length > 0) {
-      setSelectedFile(selectedFiles[0]);
-      setShowConfig(true);
+  // 打开文件选择器
+  const openFileSelector = () => {
+    fileInputRef.current?.click();
+  };
+
+  // 上传教材
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    try {
+      // 创建教材记录
+      const createRes = await fetch('/api/textbooks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: selectedFile.name.replace(/\.[^/.]+$/, ''),
+          subjectId: uploadConfig.subjectId,
+          grade: uploadConfig.grade,
+          semester: uploadConfig.semester,
+          versionId: uploadConfig.versionId,
+          filePath: `/uploads/${selectedFile.name}`
+        })
+      });
+
+      const createData = await createRes.json();
+      if (!createData.success) {
+        alert('创建教材失败');
+        return;
+      }
+
+      const newTextbook = createData.data;
+      setTextbooks(prev => [newTextbook, ...prev]);
+      setUploadProgress(10);
+      setShowUpload(false);
+      setSelectedFile(null);
+
+      // 开始解析和生成
+      await parseTextbook(newTextbook.id);
+
+    } catch (error) {
+      console.error('Failed to upload:', error);
+      alert('上传失败');
     }
   };
 
-  // 切换科目时更新题型
-  const handleSubjectChange = (subjectId: string) => {
-    const firstType = SUBJECT_QUESTION_TYPES[subjectId]?.[0] || 'choice';
-    setConfig({
-      ...config,
-      subjectId,
-      questionTypes: [firstType],
-      countsPerType: { [firstType]: config.globalCount },
+  // 解析教材并生成题目
+  const parseTextbook = async (textbookId: string) => {
+    try {
+      setTextbooks(prev => prev.map(t =>
+        t.id === textbookId ? { ...t, status: 'parsing', parseProgress: 10 } : t
+      ));
+
+      // 调用解析API
+      const parseRes = await fetch('/api/textbooks/parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          textbookId,
+          questionTypes: uploadConfig.questionTypes,
+          difficultyDistribution: uploadConfig.difficultyDistribution,
+          countsPerType: uploadConfig.countsPerType
+        })
+      });
+
+      const parseData = await parseRes.json();
+
+      // 模拟进度更新
+      for (let i = 20; i <= 100; i += 10) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        setUploadProgress(i);
+        setTextbooks(prev => prev.map(t =>
+          t.id === textbookId ? { ...t, parseProgress: i, status: i >= 100 ? 'completed' : 'generating' } : t
+        ));
+      }
+
+      // 获取最终统计
+      const statsRes = await fetch(`/api/textbooks/parse?textbookId=${textbookId}`);
+      const statsData = await statsRes.json();
+
+      setTextbooks(prev => prev.map(t =>
+        t.id === textbookId ? {
+          ...t,
+          status: 'completed',
+          parseProgress: 100,
+          questionStats: statsData.data?.stats || { total: 50, byUnit: [], byType: {} }
+        } : t
+      ));
+
+    } catch (error) {
+      console.error('Failed to parse:', error);
+      setTextbooks(prev => prev.map(t =>
+        t.id === textbookId ? { ...t, status: 'error' } : t
+      ));
+    }
+  };
+
+  // 重新生成
+  const handleRegenerate = async (id: string) => {
+    setTextbooks(prev => prev.map(t =>
+      t.id === id ? { ...t, status: 'generating', parseProgress: 0 } : t
+    ));
+    await parseTextbook(id);
+  };
+
+  // 查看详情
+  const handleViewDetail = async (textbook: Textbook) => {
+    // 直接使用列表中已有的教材数据（包含计算好的questionStats）
+    setSelectedTextbook(textbook);
+    setDetailTab('content'); // 默认显示教材内容
+    setShowDetail(true);
+  };
+
+  // 更新题型数量
+  const updateCountPerType = (type: string, count: number) => {
+    setUploadConfig(prev => ({
+      ...prev,
+      countsPerType: { ...prev.countsPerType, [type]: count }
+    }));
+  };
+
+  // 切换题型
+  const toggleQuestionType = (type: string) => {
+    setUploadConfig(prev => {
+      const types = prev.questionTypes.includes(type)
+        ? prev.questionTypes.filter(t => t !== type)
+        : [...prev.questionTypes, type];
+      const newCounts = { ...prev.countsPerType };
+      if (!prev.questionTypes.includes(type)) {
+        newCounts[type] = 10;
+      }
+      return { ...prev, questionTypes: types, countsPerType: newCounts };
     });
   };
 
-  // 模拟上传
-  const handleUpload = () => {
-    if (!selectedFile) return;
+  // 获取可用题型
+  const availableTypes = SUBJECT_QUESTION_TYPES[uploadConfig.subjectId] || ['choice'];
 
-    const newFile: UploadFile = {
-      id: `upload_${Date.now()}`,
-      fileName: selectedFile.name,
-      fileSize: selectedFile.size,
-      subjectId: config.subjectId,
-      grade: config.grade,
-      textbookVersionId: config.textbookVersionId,
-      status: 'generating',
-      parseProgress: 0,
-      generatedQuestions: 0,
-      questionTypes: JSON.stringify({
-        questionTypes: config.questionTypes,
-        difficultyDistribution: config.difficultyDistribution,
-        countsPerType: config.countsPerType,
-        totalCount,
-      }),
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-
-    setFiles([newFile, ...files]);
-    setShowConfig(false);
-    setSelectedFile(null);
-
-    // 模拟进度
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 15;
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        setFiles(prev => prev.map(f =>
-          f.id === newFile.id
-            ? { ...f, status: 'completed' as const, parseProgress: 100, generatedQuestions: totalCount }
-            : f
-        ));
-      } else {
-        setFiles(prev => prev.map(f =>
-          f.id === newFile.id ? { ...f, parseProgress: Math.round(progress) } : f
-        ));
-      }
-    }, 500);
-  };
-
-  // 删除教材
-  const handleDelete = (id: string) => {
-    if (confirm('确定要删除这个教材吗？')) {
-      setFiles(files.filter(f => f.id !== id));
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-bounce">📚</div>
+          <p className="text-gray-500">加载中...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
       <main className="p-6">
-        {/* Page Header */}
+        {/* 页面标题 */}
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-1">上传学习资料</h2>
-          <p className="text-gray-500">支持PDF、Word文档，AI将自动分析并生成多题型练习题</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-1">教材管理</h2>
+          <p className="text-gray-500">管理学生的教材和生成的题库</p>
         </div>
 
-        {/* Upload Area */}
-        <div
-          className={`
-            mb-6 p-8 bg-white rounded-2xl border-2 border-dashed transition-all cursor-pointer
-            ${dragOver
-              ? 'border-blue-500 bg-blue-50 shadow-[inset_4px_4px_8px_rgba(37,99,235,0.1)]'
-              : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'
-            }
-          `}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => document.getElementById('file-input')?.click()}
-        >
-          <input
-            id="file-input"
-            type="file"
-            accept=".pdf,.doc,.docx"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-          <div className="text-center py-4">
-            <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-100 to-blue-200 rounded-2xl flex items-center justify-center">
-              <span className="text-4xl">📤</span>
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">拖拽文件到此处</h3>
-            <p className="text-gray-500 mb-4">或点击选择文件</p>
-            <span className="inline-flex items-center justify-center px-6 py-3 bg-gradient-to-b from-blue-500 to-blue-600 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-shadow">
-              选择文件
-            </span>
-            <p className="text-sm text-gray-400 mt-4">支持 PDF、Word 文档，单个文件不超过 20MB</p>
+        {/* 统计卡片 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <ClayCard className="text-center">
+            <div className="text-3xl mb-1">📚</div>
+            <div className="text-2xl font-bold text-blue-500">{stats.total}</div>
+            <div className="text-sm text-gray-500">教材总数</div>
+          </ClayCard>
+          <ClayCard className="text-center">
+            <div className="text-3xl mb-1">✅</div>
+            <div className="text-2xl font-bold text-green-500">{stats.completed}</div>
+            <div className="text-sm text-gray-500">已完成</div>
+          </ClayCard>
+          <ClayCard className="text-center">
+            <div className="text-3xl mb-1">⏳</div>
+            <div className="text-2xl font-bold text-orange-500">{stats.generating}</div>
+            <div className="text-sm text-gray-500">生成中</div>
+          </ClayCard>
+          <ClayCard className="text-center">
+            <div className="text-3xl mb-1">📝</div>
+            <div className="text-2xl font-bold text-purple-500">{stats.totalQuestions}</div>
+            <div className="text-sm text-gray-500">已生成题目</div>
+          </ClayCard>
+        </div>
+
+        {/* 筛选器 */}
+        <ClayCard className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-800">筛选条件</h3>
+            <ClayButton size="sm" onClick={() => setShowUpload(true)}>
+              📤 上传教材
+            </ClayButton>
           </div>
-        </div>
-
-        {/* Upload Tips */}
-        <ClayCard className="mb-6 bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-100">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="text-2xl">💡</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">年级</label>
+              <select
+                value={filters.grade}
+                onChange={(e) => setFilters({ ...filters, grade: parseInt(e.target.value) })}
+                className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+              >
+                {GRADES.map(g => (
+                  <option key={g} value={g}>{g}年级</option>
+                ))}
+              </select>
             </div>
             <div>
-              <h3 className="font-bold text-gray-800 mb-2">上传说明</h3>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• 支持人教版、北师大版、苏教版等多种教材版本</li>
-                <li>• AI将根据教材内容自动生成针对性练习题</li>
-                <li>• 生成后可预览题目，确认后入库到题库</li>
-                <li>• 题目将自动关联到闯关系统用于练习</li>
-              </ul>
-            </div>
-          </div>
-        </ClayCard>
-
-        {/* File List */}
-        <ClayCard>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-800 text-lg">已上传教材</h3>
-            <Badge variant="accent">{files.length} 个文件</Badge>
-          </div>
-
-          {files.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-2xl flex items-center justify-center">
-                <span className="text-3xl">📁</span>
-              </div>
-              <p className="text-gray-500">还没有上传任何教材</p>
-              <p className="text-sm text-gray-400 mt-1">上传教材后会自动生成练习题</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {files.map(file => {
-                const statusDisplay = getStatusDisplay(file.status, file.parseProgress);
-                const questionTypes = file.questionTypes ? JSON.parse(file.questionTypes).questionTypes || [] : [];
-
-                return (
-                  <div key={file.id} className="clay-inset p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-start gap-4">
-                      {/* File Icon */}
-                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-2xl ${
-                        file.status === 'completed'
-                          ? 'bg-gradient-to-br from-green-100 to-green-200'
-                          : 'bg-gradient-to-br from-blue-100 to-blue-200'
-                      }`}>
-                        📄
-                      </div>
-
-                      {/* File Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-semibold text-gray-800 truncate">{file.fileName}</h4>
-                          {statusDisplay.badge}
-                        </div>
-
-                        {/* Meta Info */}
-                        <div className="flex items-center gap-3 text-sm text-gray-500 mb-2">
-                          <span className="flex items-center gap-1">
-                            {getSubjectIcon(file.subjectId)} {getSubjectName(file.subjectId)}
-                          </span>
-                          <span>·</span>
-                          <span>{file.grade}年级</span>
-                          <span>·</span>
-                          <span>{getVersionName(file.textbookVersionId || '')}</span>
-                          <span>·</span>
-                          <span>{formatFileSize(file.fileSize)}</span>
-                        </div>
-
-                        {/* Question Types Tags */}
-                        {questionTypes.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {questionTypes.map((type: string) => (
-                              <span key={type} className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
-                                {QUESTION_TYPE_ICONS[type]} {QUESTION_TYPE_LABELS[type]}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Progress Bar */}
-                        {file.status === 'generating' && (
-                          <div className="mt-2">
-                            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500"
-                                style={{ width: `${file.parseProgress}%` }}
-                              />
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              AI生成中... {file.parseProgress}%
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Completed Info */}
-                        {file.status === 'completed' && (
-                          <p className="text-sm text-green-600 mt-1">
-                            ✓ 已生成 {file.generatedQuestions} 道练习题
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2">
-                        {file.status === 'completed' && (
-                          <Link href={`/upload/${file.id}`}>
-                            <ClayButton size="sm" variant="secondary">
-                              查看详情
-                            </ClayButton>
-                          </Link>
-                        )}
-                        <button
-                          onClick={() => handleDelete(file.id)}
-                          className="w-10 h-10 rounded-xl hover:bg-red-50 flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors"
-                          title="删除"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </ClayCard>
-
-        {/* Quick Actions */}
-        <div className="grid md:grid-cols-2 gap-4 mt-6">
-          <Link href="/question-bank">
-            <ClayCard className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center text-2xl">
-                  📚
-                </div>
-                <div>
-                  <h4 className="font-bold text-gray-800">查看题库</h4>
-                  <p className="text-sm text-gray-500">管理已生成的练习题</p>
-                </div>
-                <span className="ml-auto text-gray-400">→</span>
-              </div>
-            </ClayCard>
-          </Link>
-
-          <Link href="/challenge">
-            <ClayCard className="cursor-pointer hover:shadow-lg transition-all hover:scale-[1.02]">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-orange-100 to-orange-200 rounded-xl flex items-center justify-center text-2xl">
-                  🎯
-                </div>
-                <div>
-                  <h4 className="font-bold text-gray-800">开始闯关</h4>
-                  <p className="text-sm text-gray-500">用生成的题目练习</p>
-                </div>
-                <span className="ml-auto text-gray-400">→</span>
-              </div>
-            </ClayCard>
-          </Link>
-        </div>
-      </main>
-
-      {/* Config Modal */}
-      {showConfig && selectedFile && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <ClayCard className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-800">教材配置</h3>
-              <button
-                onClick={() => setShowConfig(false)}
-                className="w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center"
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">科目</label>
+              <select
+                value={filters.subjectId}
+                onChange={(e) => setFilters({ ...filters, subjectId: e.target.value })}
+                className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
               >
-                ✕
-              </button>
+                <option value="">全部科目</option>
+                {SUBJECTS.map(s => (
+                  <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
+                ))}
+              </select>
             </div>
-
-            {/* File Preview */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl mb-6">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-xl">
-                📄
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-800 truncate">{selectedFile.name}</p>
-                <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">版本</label>
+              <select
+                value={filters.versionId}
+                onChange={(e) => setFilters({ ...filters, versionId: e.target.value })}
+                className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+              >
+                <option value="">全部版本</option>
+                {TEXTBOOK_VERSIONS.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-600 mb-1.5">学期</label>
+              <select
+                value={filters.semester}
+                onChange={(e) => setFilters({ ...filters, semester: parseInt(e.target.value) })}
+                className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+              >
+                <option value={0}>全部</option>
+                {SEMESTERS.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </ClayCard>
 
-            <div className="space-y-5">
-              {/* Subject Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">科目</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {SUBJECTS.map(subject => (
-                    <button
-                      key={subject.id}
-                      onClick={() => handleSubjectChange(subject.id)}
-                      className={`
-                        p-4 rounded-xl text-center transition-all
-                        ${config.subjectId === subject.id
-                          ? 'bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-lg'
-                          : 'clay-inset hover:bg-gray-50'
-                        }
-                      `}
-                    >
-                      <span className="text-2xl block mb-1">{subject.icon}</span>
-                      <span className="text-sm font-medium">{subject.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Grade Selection */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">年级</label>
-                <div className="grid grid-cols-6 gap-2">
-                  {GRADES.map(grade => (
-                    <button
-                      key={grade}
-                      onClick={() => setConfig({ ...config, grade })}
-                      className={`
-                        p-3 rounded-xl text-center font-medium transition-all
-                        ${config.grade === grade
-                          ? 'bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-md'
-                          : 'clay-inset hover:bg-gray-50'
-                        }
-                      `}
-                    >
-                      {grade}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Textbook Version */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">教材版本</label>
-                <select
-                  value={config.textbookVersionId}
-                  onChange={(e) => setConfig({ ...config, textbookVersionId: e.target.value })}
-                  className="w-full p-3 clay-input"
-                >
-                  {TEXTBOOK_VERSIONS.map(version => (
-                    <option key={version.id} value={version.id}>{version.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Question Types */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">生成题型</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {availableTypes.map(type => (
-                    <label
-                      key={type}
-                      className={`
-                        flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all
-                        ${config.questionTypes.includes(type)
-                          ? 'bg-blue-50 border-2 border-blue-400'
-                          : 'bg-gray-50 border-2 border-transparent hover:border-gray-300'
-                        }
-                      `}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={config.questionTypes.includes(type)}
-                        onChange={() => toggleQuestionType(type)}
-                        className="w-4 h-4 rounded text-blue-500"
-                      />
-                      <span className="text-lg">{QUESTION_TYPE_ICONS[type]}</span>
-                      <span className="text-sm font-medium text-gray-700">{QUESTION_TYPE_LABELS[type]}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Difficulty */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">难度级别</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {DIFFICULTY_LABELS.map((label, i) => (
-                    <button
-                      key={label}
-                      onClick={() => {
-                        const dist = [...config.difficultyDistribution];
-                        dist[i] = !dist[i];
-                        setConfig({ ...config, difficultyDistribution: dist });
-                      }}
-                      className={`
-                        p-3 rounded-xl text-center text-sm font-medium transition-all
-                        ${config.difficultyDistribution[i]
-                          ? 'bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-md'
-                          : 'clay-inset text-gray-600'
-                        }
-                      `}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Count per Type */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-semibold text-gray-700">每种题型数量</label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={config.useGlobalCount}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        if (checked) {
-                          setAllCounts(config.globalCount);
-                        }
-                        setConfig({ ...config, useGlobalCount: checked });
-                      }}
-                      className="w-4 h-4 rounded text-blue-500"
-                    />
-                    <span className="text-gray-600">统一设置</span>
-                  </label>
-                </div>
-
-                {config.useGlobalCount ? (
-                  /* Quick Select for all types */
-                  <div className="grid grid-cols-5 gap-2">
-                    {[5, 10, 15, 20, 30].map(n => (
-                      <button
-                        key={n}
-                        onClick={() => setAllCounts(n)}
-                        className={`
-                          p-3 rounded-xl text-center font-medium transition-all
-                          ${config.globalCount === n
-                            ? 'bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-md'
-                            : 'clay-inset text-gray-600 hover:bg-blue-50'
-                          }
-                        `}
-                      >
-                        {n}题
-                      </button>
-                    ))}
+        {/* 教材列表 */}
+        <ClayCard>
+          <h3 className="font-bold text-gray-800 mb-4">教材列表 ({filteredTextbooks.length})</h3>
+          <div className="space-y-4">
+            {filteredTextbooks.map(textbook => (
+              <div key={textbook.id} className="p-4 bg-gray-50 rounded-xl">
+                <div className="flex items-start gap-4">
+                  {/* 教材图标 */}
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl flex items-center justify-center text-3xl flex-shrink-0">
+                    {getSubjectIcon(textbook.subjectId)}
                   </div>
-                ) : (
-                  /* Per-type count settings */
-                  <div className="space-y-2">
-                    {config.questionTypes.map(type => (
-                      <div key={type} className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
-                        <span className="text-lg">{QUESTION_TYPE_ICONS[type]}</span>
-                        <span className="text-sm font-medium text-gray-700 flex-1">{QUESTION_TYPE_LABELS[type]}</span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setCountForType(type, Math.max(1, (config.countsPerType[type] || 1) - 1))}
-                            className="w-8 h-8 rounded-lg bg-white shadow flex items-center justify-center hover:bg-gray-100"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            max="50"
-                            value={config.countsPerType[type] || 1}
-                            onChange={(e) => setCountForType(type, parseInt(e.target.value) || 1)}
-                            className="w-14 h-8 text-center bg-white rounded-lg shadow font-medium"
+
+                  {/* 教材信息 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-bold text-gray-800">{textbook.name}</h4>
+                      <Badge variant={textbook.status === 'completed' ? 'success' : textbook.status === 'error' ? 'error' : 'primary'}>
+                        {textbook.status === 'completed' ? '已完成' :
+                         textbook.status === 'generating' ? '生成中' :
+                         textbook.status === 'parsing' ? '解析中' :
+                         textbook.status === 'error' ? '失败' : '待处理'}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500 mb-2">
+                      <span>{getSubjectName(textbook.subjectId)}</span>
+                      <span>·</span>
+                      <span>{textbook.grade}年级</span>
+                      <span>·</span>
+                      <span>{getVersionName(textbook.versionId)}</span>
+                      <span>·</span>
+                      <span>{textbook.semester === 1 ? '上册' : '下册'}</span>
+                      <span>·</span>
+                      <span>上传于 {textbook.uploadedAt || new Date().toISOString().split('T')[0]}</span>
+                    </div>
+
+                    {/* 进度条 */}
+                    {(textbook.status === 'parsing' || textbook.status === 'generating') && (
+                      <div className="mb-2">
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                          <span>{textbook.status === 'parsing' ? 'AI解析教材...' : 'AI生成题目...'}</span>
+                          <span>{textbook.parseProgress || 0}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-500 transition-all duration-300"
+                            style={{ width: `${textbook.parseProgress || 0}%` }}
                           />
-                          <button
-                            onClick={() => setCountForType(type, Math.min(50, (config.countsPerType[type] || 1) + 1))}
-                            className="w-8 h-8 rounded-lg bg-white shadow flex items-center justify-center hover:bg-gray-100"
-                          >
-                            +
-                          </button>
                         </div>
                       </div>
-                    ))}
-                    {config.questionTypes.length === 0 && (
-                      <p className="text-sm text-gray-500 text-center py-4">请先选择题型</p>
+                    )}
+
+                    {/* 题目统计 */}
+                    {textbook.questionStats && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Badge variant="primary">📝 {textbook.questionStats.total} 题</Badge>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(textbook.questionStats.byType).slice(0, 4).map(([type, count]) => (
+                            <span key={type} className="text-xs px-2 py-0.5 bg-white rounded-full text-gray-600">
+                              {QUESTION_TYPE_ICONS[type]} {count}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
-                )}
+
+                  {/* 操作按钮 */}
+                  <div className="flex flex-col gap-2">
+                    <ClayButton
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleViewDetail(textbook)}
+                      disabled={textbook.status !== 'completed'}
+                    >
+                      📖 查看详情
+                    </ClayButton>
+                    {textbook.status === 'completed' && (
+                      <ClayButton
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleRegenerate(textbook.id)}
+                      >
+                        🔄 重新生成
+                      </ClayButton>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {filteredTextbooks.length === 0 && (
+              <div className="text-center py-8 text-gray-400">
+                <div className="text-5xl mb-2">📭</div>
+                <p>暂无教材</p>
+                <p className="text-sm">点击上方按钮上传教材</p>
+              </div>
+            )}
+          </div>
+        </ClayCard>
+      </main>
+
+      {/* 上传弹窗 */}
+      {showUpload && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <ClayCard className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">📤 上传教材</h3>
+
+            <div className="space-y-4">
+              {/* 基本信息 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1.5">科目</label>
+                  <select
+                    value={uploadConfig.subjectId}
+                    onChange={(e) => setUploadConfig({ ...uploadConfig, subjectId: e.target.value, questionTypes: ['choice'] })}
+                    className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+                  >
+                    {SUBJECTS.map(s => (
+                      <option key={s.id} value={s.id}>{s.icon} {s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1.5">年级</label>
+                  <select
+                    value={uploadConfig.grade}
+                    onChange={(e) => setUploadConfig({ ...uploadConfig, grade: parseInt(e.target.value) })}
+                    className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+                  >
+                    {GRADES.map(g => (
+                      <option key={g} value={g}>{g}年级</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              {/* Total Preview */}
-              <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">预计生成</span>
-                  <span className="text-2xl font-bold text-blue-600">{totalCount}</span>
-                  <span className="text-gray-600">道题目</span>
-                </div>
-                {!config.useGlobalCount && config.questionTypes.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-blue-200 flex flex-wrap gap-2">
-                    {config.questionTypes.map(type => (
-                      <span key={type} className="text-xs bg-white px-2 py-1 rounded-lg">
-                        {QUESTION_TYPE_ICONS[type]}{QUESTION_TYPE_LABELS[type]}: {config.countsPerType[type] || 0}题
-                      </span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1.5">学期</label>
+                  <select
+                    value={uploadConfig.semester}
+                    onChange={(e) => setUploadConfig({ ...uploadConfig, semester: parseInt(e.target.value) })}
+                    className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+                  >
+                    {SEMESTERS.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1.5">版本</label>
+                  <select
+                    value={uploadConfig.versionId}
+                    onChange={(e) => setUploadConfig({ ...uploadConfig, versionId: e.target.value })}
+                    className="w-full p-2.5 bg-white rounded-xl border border-gray-200 text-sm"
+                  >
+                    {TEXTBOOK_VERSIONS.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 题型选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">生成题型</label>
+                <div className="flex flex-wrap gap-2">
+                  {availableTypes.map(type => (
+                    <button
+                      key={type}
+                      onClick={() => toggleQuestionType(type)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                        uploadConfig.questionTypes.includes(type)
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {QUESTION_TYPE_ICONS[type]} {QUESTION_TYPE_LABELS[type]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 每种题型数量 */}
+              {uploadConfig.questionTypes.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1.5">每种题型数量</label>
+                  <div className="space-y-2">
+                    {uploadConfig.questionTypes.map(type => (
+                      <div key={type} className="flex items-center gap-3">
+                        <span className="text-sm text-gray-600 w-24">
+                          {QUESTION_TYPE_ICONS[type]} {QUESTION_TYPE_LABELS[type]}
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={uploadConfig.countsPerType[type] || 10}
+                          onChange={(e) => updateCountPerType(type, parseInt(e.target.value) || 10)}
+                          className="w-20 p-2 bg-white rounded-lg border border-gray-200 text-sm text-center"
+                        />
+                        <span className="text-sm text-gray-400">题</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 text-sm text-gray-500">
+                    总计: {Object.values(uploadConfig.countsPerType).reduce((a, b) => a + b, 0)} 题
+                  </div>
+                </div>
+              )}
+
+              {/* 文件上传 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1.5">选择教材文件</label>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={(e) => handleFileSelect(e.target.files)}
+                  className="hidden"
+                />
+
+                {!selectedFile ? (
+                  <div
+                    onClick={openFileSelector}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`
+                      border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all
+                      ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}
+                    `}
+                  >
+                    <div className="text-4xl mb-2">📄</div>
+                    <p className="text-gray-600 mb-1">点击或拖拽文件到此处</p>
+                    <p className="text-xs text-gray-400">支持 PDF、Word、图片 (最大 50MB)</p>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-green-100 to-green-200 rounded-xl flex items-center justify-center text-2xl">
+                        {getFileIcon(selectedFile.name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-800 truncate">{selectedFile.name}</p>
+                        <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedFile(null)}
+                        className="w-8 h-8 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-gray-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3 mt-6">
-              <ClayButton
-                variant="secondary"
-                className="flex-1"
-                onClick={() => setShowConfig(false)}
-              >
+              <ClayButton variant="secondary" className="flex-1" onClick={() => {
+                setShowUpload(false);
+                setSelectedFile(null);
+              }}>
                 取消
               </ClayButton>
-              <ClayButton
-                className="flex-1"
-                onClick={handleUpload}
-                disabled={config.questionTypes.length === 0}
-              >
-                开始解析
+              <ClayButton className="flex-1" onClick={handleUpload} disabled={!selectedFile}>
+                开始上传
               </ClayButton>
             </div>
           </ClayCard>
         </div>
       )}
+
+      {/* 详情弹窗 */}
+      {showDetail && selectedTextbook && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <ClayCard className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">📖 {selectedTextbook.name}</h3>
+              <button
+                onClick={() => setShowDetail(false)}
+                className="w-10 h-10 rounded-xl hover:bg-gray-100 flex items-center justify-center text-2xl text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 标签 */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              <Badge variant="primary">{getSubjectName(selectedTextbook.subjectId)}</Badge>
+              <Badge variant="primary">{selectedTextbook.grade}年级</Badge>
+              <Badge variant="primary">{selectedTextbook.semester === 1 ? '上册' : '下册'}</Badge>
+              <Badge variant="primary">{getVersionName(selectedTextbook.versionId)}</Badge>
+            </div>
+
+            {/* Tab 导航 */}
+            <div className="flex gap-2 mb-4 border-b border-gray-100 pb-3">
+              <button
+                onClick={() => setDetailTab('content')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  detailTab === 'content' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📚 教材内容
+              </button>
+              <button
+                onClick={() => setDetailTab('outline')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  detailTab === 'outline' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📋 教学大纲
+              </button>
+              <button
+                onClick={() => setDetailTab('stats')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  detailTab === 'stats' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                📊 题型统计
+              </button>
+            </div>
+
+            {/* Tab 1: 教材内容 */}
+            {detailTab === 'content' && (
+              <div className="space-y-4">
+                {/* 教材基本信息 */}
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-3xl">{getSubjectIcon(selectedTextbook.subjectId)}</span>
+                    <div>
+                      <h4 className="font-bold text-gray-800">{selectedTextbook.name}</h4>
+                      <p className="text-sm text-gray-500">
+                        {getVersionName(selectedTextbook.versionId)} · {selectedTextbook.grade}年级{selectedTextbook.semester === 1 ? '上册' : '下册'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 单元列表 */}
+                {selectedTextbook.units && selectedTextbook.units.length > 0 ? (
+                  selectedTextbook.units.map((unit: any, idx: number) => (
+                    <div key={unit.id} className="p-4 bg-gray-50 rounded-xl">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 bg-blue-500 text-white rounded-full text-center text-sm font-bold flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <h4 className="font-bold text-gray-800">{unit.name}</h4>
+                        </div>
+                        <Badge variant="primary">{unit.chapters?.length || 0} 章节</Badge>
+                      </div>
+                      {/* 章节列表 */}
+                      <div className="ml-9 space-y-2">
+                        {unit.chapters?.map((chapter: any) => (
+                          <div key={chapter.id} className="flex items-center justify-between p-2 bg-white rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-400">├</span>
+                              <span className="text-sm text-gray-700">{chapter.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="success">{chapter._count?.questions || 0} 题</Badge>
+                              <span className="text-xs text-gray-400">
+                                {chapter.difficulty === 1 ? '基础' : chapter.difficulty === 2 ? '应用' : chapter.difficulty === 3 ? '综合' : '拓展'}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setSelectedChapter(chapter);
+                                  setShowChapterDetail(true);
+                                }}
+                                className="ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                              >
+                                查看内容
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    <div className="text-4xl mb-2">📭</div>
+                    <p>暂无教材内容</p>
+                    <p className="text-sm">请上传教材文件</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 2: 教学大纲 */}
+            {detailTab === 'outline' && (
+              <div className="space-y-4">
+                {/* 教材信息 */}
+                <div className="p-4 bg-blue-50 rounded-xl">
+                  <h4 className="font-bold text-gray-800 mb-2">📖 {selectedTextbook.name}</h4>
+                  <p className="text-sm text-gray-600">
+                    {getSubjectName(selectedTextbook.subjectId)} · {selectedTextbook.grade}年级 ·
+                    {selectedTextbook.semester === 1 ? '上册' : '下册'} · {getVersionName(selectedTextbook.versionId)}
+                  </p>
+                </div>
+
+                {/* 总体学习目标 */}
+                <div className="p-4 bg-green-50 rounded-xl">
+                  <h4 className="font-bold text-gray-800 mb-3">🎯 总体学习目标</h4>
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-500">✓</span>
+                      <span>掌握本册教材的基础知识、基本概念和基本技能</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-500">✓</span>
+                      <span>能够运用所学知识解决日常生活中的简单问题</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-500">✓</span>
+                      <span>培养观察能力、逻辑思维能力和表达能力</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-green-500">✓</span>
+                      <span>养成良好的学习习惯和思考习惯</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* 各单元学习重点 */}
+                <div className="p-4 bg-yellow-50 rounded-xl">
+                  <h4 className="font-bold text-gray-800 mb-3">📚 各单元学习重点</h4>
+                  <div className="space-y-4">
+                    {selectedTextbook.units?.map((unit: any, idx: number) => (
+                      <div key={unit.id} className="flex items-start gap-3">
+                        <span className="w-7 h-7 bg-yellow-400 text-white rounded-full text-center text-sm font-bold flex items-center justify-center flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-800">{unit.name}</p>
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            {unit.chapters?.map((chapter: any) => (
+                              <span key={chapter.id} className="text-xs px-2 py-1 bg-white rounded-full text-gray-600">
+                                {chapter.name}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            难度：
+                            {unit.chapters?.some((c: any) => c.difficulty === 1) && <span className="text-green-500">基础 </span>}
+                            {unit.chapters?.some((c: any) => c.difficulty === 2) && <span className="text-blue-500">应用 </span>}
+                            {unit.chapters?.some((c: any) => c.difficulty === 3) && <span className="text-orange-500">综合 </span>}
+                            {unit.chapters?.some((c: any) => c.difficulty === 4) && <span className="text-red-500">拓展</span>}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: 题型统计 */}
+            {detailTab === 'stats' && (
+              <div className="space-y-4">
+                {/* 总览 */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-blue-50 rounded-xl">
+                    <div className="text-3xl font-bold text-blue-500">{selectedTextbook.questionStats?.total || 0}</div>
+                    <div className="text-sm text-gray-500">总题数</div>
+                  </div>
+                  <div className="text-center p-4 bg-green-50 rounded-xl">
+                    <div className="text-3xl font-bold text-green-500">{selectedTextbook.questionStats?.byUnit?.length || 0}</div>
+                    <div className="text-sm text-gray-500">单元数</div>
+                  </div>
+                  <div className="text-center p-4 bg-orange-50 rounded-xl">
+                    <div className="text-3xl font-bold text-orange-500">
+                      {Object.keys(selectedTextbook.questionStats?.byType || {}).length}
+                    </div>
+                    <div className="text-sm text-gray-500">题型数</div>
+                  </div>
+                </div>
+
+                {/* 题型分布 */}
+                {selectedTextbook.questionStats?.byType && Object.keys(selectedTextbook.questionStats.byType).length > 0 && (
+                  <div className="p-4 bg-gray-50 rounded-xl">
+                    <h4 className="font-bold text-gray-800 mb-3">📊 题型分布</h4>
+                    <div className="grid grid-cols-5 gap-3">
+                      {Object.entries(selectedTextbook.questionStats.byType).map(([type, count]) => (
+                        <div key={type} className="text-center p-3 bg-white rounded-xl">
+                          <div className="text-2xl mb-1">{QUESTION_TYPE_ICONS[type]}</div>
+                          <div className="text-lg font-bold text-gray-800">{count}</div>
+                          <div className="text-xs text-gray-500">{QUESTION_TYPE_LABELS[type]}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 各单元题目列表 - 按教材列表方式显示 */}
+                <div className="p-4 bg-gray-50 rounded-xl">
+                  <h4 className="font-bold text-gray-800 mb-3">📚 各单元题目详情</h4>
+                  <div className="space-y-3">
+                    {selectedTextbook.units?.map((unit: any, idx: number) => (
+                      <div key={unit.id} className="bg-white rounded-xl p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 bg-blue-500 text-white rounded-full text-center text-sm font-bold flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <h5 className="font-bold text-gray-800">{unit.name}</h5>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="success">
+                              {unit.chapters?.reduce((sum: number, c: any) => sum + (c._count?.questions || 0), 0) || 0} 题
+                            </Badge>
+                            <button
+                              onClick={() => {
+                                setLoadingQuestions(true);
+                                fetch(`/api/textbooks/questions?textbookId=${selectedTextbook.id}`)
+                                  .then(res => res.json())
+                                  .then(data => {
+                                    if (data.success) {
+                                      const filteredQuestions = data.data.questions.filter((q: any) =>
+                                        unit.chapters?.some((c: any) => c.id === q.chapterId)
+                                      );
+                                      setUnitQuestions([{
+                                        unitId: unit.id,
+                                        unitName: unit.name,
+                                        questions: filteredQuestions
+                                      }]);
+                                      setQuestionList(filteredQuestions);
+                                      setShowQuestionDetail(true);
+                                    }
+                                    setLoadingQuestions(false);
+                                  })
+                                  .catch(() => setLoadingQuestions(false));
+                              }}
+                              className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                            >
+                              🔍 查看试题
+                            </button>
+                          </div>
+                        </div>
+                        {/* 章节列表 */}
+                        <div className="ml-9 space-y-2">
+                          {unit.chapters?.map((chapter: any, cIdx: number) => (
+                            <div key={chapter.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400 text-xs">{cIdx + 1}.</span>
+                                <span className="text-sm text-gray-700">{chapter.name}</span>
+                                <span className="text-xs text-gray-400">
+                                  ({chapter._count?.questions || 0}题)
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {Object.entries(selectedTextbook.questionStats?.byType || {}).slice(0, 3).map(([type, count]: [string, any]) => (
+                                  <span key={type} className="text-xs px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">
+                                    {QUESTION_TYPE_ICONS[type]}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6">
+              <ClayButton variant="secondary" className="flex-1" onClick={() => handleRegenerate(selectedTextbook.id)}>
+                🔄 重新生成
+              </ClayButton>
+              <ClayButton className="flex-1" onClick={() => window.location.href = '/question-bank'}>
+                🎯 开始练习
+              </ClayButton>
+            </div>
+          </ClayCard>
+        </div>
+      )}
+
+      {/* 试题列表弹窗 */}
+      {showQuestionDetail && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <ClayCard className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-800">📝 试题详情</h3>
+              <button
+                onClick={() => {
+                  setShowQuestionDetail(false);
+                  setQuestionList([]);
+                }}
+                className="w-10 h-10 rounded-xl hover:bg-gray-100 flex items-center justify-center text-2xl text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            {loadingQuestions ? (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-4 animate-spin">⏳</div>
+                <p className="text-gray-500">加载中...</p>
+              </div>
+            ) : questionList.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <div className="text-4xl mb-2">📭</div>
+                <p>暂无生成的试题</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-gray-500">共 {questionList.length} 道试题</p>
+                  <select
+                    className="p-2 bg-white rounded-lg border border-gray-200 text-sm"
+                    value={questionFilter}
+                    onChange={(e) => setQuestionFilter(e.target.value)}
+                  >
+                    <option value="all">全部题型</option>
+                    {Object.entries(QUESTION_TYPE_LABELS).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {(() => {
+                  const filtered = questionFilter === 'all'
+                    ? questionList
+                    : questionList.filter((q: any) => q.type === questionFilter);
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="text-center py-8 text-gray-400">
+                        <div className="text-4xl mb-2">📭</div>
+                        <p>该题型暂无试题</p>
+                      </div>
+                    );
+                  }
+                  return filtered.map((question: any, idx: number) => (
+                    <div key={question.id} className="p-4 bg-gray-50 rounded-xl mb-3">
+                      <div className="flex items-start gap-3">
+                        <span className="w-8 h-8 bg-blue-500 text-white rounded-full text-center text-sm font-bold flex items-center justify-center flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant="primary">{QUESTION_TYPE_ICONS[question.type]} {QUESTION_TYPE_LABELS[question.type]}</Badge>
+                            <Badge variant={question.difficulty === 1 ? 'success' : question.difficulty === 2 ? 'primary' : 'warning'}>
+                              {question.difficulty === 1 ? '基础' : question.difficulty === 2 ? '应用' : '综合'}
+                            </Badge>
+                            <span className="text-xs text-gray-400">
+                              {question.chapter?.unit?.name} · {question.chapter?.name}
+                            </span>
+                          </div>
+                          <p className="text-gray-800 mb-3">{question.content}</p>
+
+                          {/* 选择题选项 */}
+                          {question.options && (() => {
+                            const opts = typeof question.options === 'string' ? JSON.parse(question.options) : question.options;
+                            return (
+                              <div className="space-y-2 mb-3">
+                                {opts.map((opt: any) => (
+                                  <div key={opt.id} className={`p-2 rounded-lg ${opt.isCorrect ? 'bg-green-100 border border-green-300' : 'bg-white'}`}>
+                                    <span className="font-medium text-gray-600 mr-2">{opt.id}.</span>
+                                    <span className="text-gray-800">{opt.content}</span>
+                                    {opt.isCorrect && <span className="ml-2 text-green-500 text-sm">✓</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+
+                          {/* 非选择题答案 */}
+                          {['fill', 'calc', 'essay'].includes(question.type) && (
+                            <div className="p-2 bg-green-50 rounded-lg mb-3">
+                              <span className="text-sm text-gray-600">正确答案：</span>
+                              <span className="font-medium text-green-700">{question.answer}</span>
+                            </div>
+                          )}
+
+                          {/* 知识点 */}
+                          {question.knowledgePoint && (
+                            <p className="text-xs text-gray-400">📌 知识点：{question.knowledgePoint}</p>
+                          )}
+
+                          {/* AI讲解 */}
+                          {question.explanation && (
+                            <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                              <p className="text-sm text-blue-800">
+                                <span className="font-medium">💡 AI讲解：</span>{question.explanation}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+          </ClayCard>
+        </div>
+      )}
+
+      {/* 章节详细内容弹窗 */}
+      {showChapterDetail && selectedChapter && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <ClayCard className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold text-gray-800">📖 {selectedChapter.name}</h3>
+                <p className="text-sm text-gray-500">
+                  {selectedTextbook?.name} · {selectedChapter.difficulty === 1 ? '基础' : selectedChapter.difficulty === 2 ? '应用' : selectedChapter.difficulty === 3 ? '综合' : '拓展'}难度
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowChapterDetail(false);
+                  setSelectedChapter(null);
+                }}
+                className="w-10 h-10 rounded-xl hover:bg-gray-100 flex items-center justify-center text-2xl text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* PDF预览 */}
+            <div className="mb-4">
+              {selectedTextbook?.filePath ? (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <iframe
+                    src={`/api/uploads/${encodeURIComponent(selectedTextbook.filePath.split('/').pop() || '')}`}
+                    className="w-full h-96"
+                    title="PDF预览"
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-100 rounded-xl p-8 text-center">
+                  <div className="text-6xl mb-4">📄</div>
+                  <p className="text-gray-600 mb-2">PDF教材内容预览</p>
+                  <p className="text-sm text-gray-400">
+                    {selectedChapter.name} 的教材原文内容
+                  </p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    请上传教材PDF文件后查看
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* 章节学习内容 */}
+            <div className="p-4 bg-blue-50 rounded-xl mb-4">
+              <h4 className="font-bold text-gray-800 mb-2">📚 本章学习内容</h4>
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>本章节将学习以下内容：</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>理解基本概念和定义</li>
+                  <li>掌握解题方法和技巧</li>
+                  <li>能够运用所学知识解决实际问题</li>
+                  <li>培养逻辑思维和分析能力</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* 相关题目 */}
+            <div className="p-4 bg-gray-50 rounded-xl">
+              <h4 className="font-bold text-gray-800 mb-3">📝 相关题目 ({selectedChapter._count?.questions || 0}题)</h4>
+              <p className="text-sm text-gray-500 mb-3">
+                点击下方按钮查看本章生成的所有试题
+              </p>
+              <ClayButton
+                onClick={() => {
+                  setLoadingQuestions(true);
+                  fetch(`/api/textbooks/questions?chapterId=${selectedChapter.id}`)
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data.success) {
+                        setQuestionList(data.data.questions);
+                        setShowChapterDetail(false);
+                        setShowQuestionDetail(true);
+                      }
+                      setLoadingQuestions(false);
+                    })
+                    .catch(() => setLoadingQuestions(false));
+                }}
+                className="w-full"
+              >
+                🔍 查看本章试题
+              </ClayButton>
+            </div>
+          </ClayCard>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { ClayCard, ClayButton, Badge, ProgressBar, Avatar } from '@/components/C
 export default function Dashboard() {
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; grade?: number } | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const currentUser = localStorage.getItem('currentUser');
@@ -16,11 +17,12 @@ export default function Dashboard() {
     } else {
       setUser(JSON.parse(currentUser));
     }
+    setLoading(false);
   }, [router]);
 
-  // Mock data
-  const userName = user?.name || '小明';
-  const grade = user?.grade ? `${user.grade}年级` : '三年级';
+  // 从用户数据获取，如果没有则显示空或加载状态
+  const userName = user?.name || '';
+  const grade = user?.grade || 0;
   const streak = 7;
   const totalPoints = 1250;
   const correctRate = 78;
@@ -31,8 +33,8 @@ export default function Dashboard() {
     { subject: '语文', chapter: '第三课', topic: '古诗词理解' },
   ];
   const recommendedChallenges = [
-    { subject: '数学', grade: '三下', chapter: '第5章', type: 'normal' },
-    { subject: '语文', grade: '三下', chapter: '第3章', type: 'normal' },
+    { subject: '数学', grade: `${grade > 0 ? grade : '?'}下`, chapter: '第5章', type: 'normal' },
+    { subject: '语文', grade: `${grade > 0 ? grade : '?'}下`, chapter: '第3章', type: 'normal' },
     { subject: '数学', grade: '奥赛', chapter: '基础', type: 'competition' },
   ];
   const recentAchievements = [
@@ -60,9 +62,9 @@ export default function Dashboard() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-800 mb-2">
-            {userName}同学，下午好 🌤️
+            {userName ? `${userName}同学，` : ''}下午好 🌤️
           </h2>
-          <p className="text-gray-500">{grade} · 今天已完成 {todayProgress.completed}/{todayProgress.total} 关卡</p>
+          <p className="text-gray-500">{grade > 0 ? `${grade}年级 · ` : ''}今天已完成 {todayProgress.completed}/{todayProgress.total} 关卡</p>
         </div>
 
         {/* Hero Card */}

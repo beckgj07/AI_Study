@@ -1,11 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ClayCard, ClayButton, Badge, ClayInput, Avatar } from '@/components/ClayCard';
 
+interface User {
+  id: string;
+  name: string;
+  grade?: number;
+}
+
 export default function SettingsPage() {
-  const [userName, setUserName] = useState('小明');
+  const [user, setUser] = useState<User | null>(null);
+  const [userName, setUserName] = useState('');
   const [notifications, setNotifications] = useState({
     dailyReminder: true,
     wrongQuestionReminder: true,
@@ -13,8 +20,31 @@ export default function SettingsPage() {
     parentNotification: false,
   });
 
+  // 从 localStorage 加载用户数据
+  useEffect(() => {
+    const currentUser = localStorage.getItem('currentUser');
+    if (currentUser) {
+      const userData = JSON.parse(currentUser);
+      setUser(userData);
+      setUserName(userData.name || '');
+    }
+  }, []);
+
   const handleSave = () => {
-    // Save settings
+    if (!user) return;
+    // 更新本地存储的用户数据
+    const updatedUser = { ...user, name: userName };
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    // 同时更新全局用户列表（如果存在）
+    const allUsers = localStorage.getItem('users');
+    if (allUsers) {
+      const users = JSON.parse(allUsers);
+      const index = users.findIndex((u: User) => u.id === user.id);
+      if (index !== -1) {
+        users[index] = updatedUser;
+        localStorage.setItem('users', JSON.stringify(users));
+      }
+    }
     alert('设置已保存！');
   };
 
@@ -37,10 +67,10 @@ export default function SettingsPage() {
         <ClayCard className="mb-6">
           <h3 className="font-bold text-gray-800 mb-4">个人资料</h3>
           <div className="flex items-center gap-4 mb-4">
-            <Avatar name={userName} size="lg" />
+            <Avatar name={userName || '用户'} size="lg" />
             <div>
-              <p className="font-medium text-gray-800">{userName}</p>
-              <p className="text-sm text-gray-500">三年级</p>
+              <p className="font-medium text-gray-800">{userName || '未设置'}</p>
+              <p className="text-sm text-gray-500">{user?.grade ? `${user.grade}年级` : '未设置年级'}</p>
             </div>
             <ClayButton variant="secondary" size="sm" className="ml-auto">
               修改头像
